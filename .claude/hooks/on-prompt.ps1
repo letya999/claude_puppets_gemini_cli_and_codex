@@ -8,23 +8,30 @@
     then outputs a MANDATORY INSTRUCTION to stdout.
     Claude Code shows this output to Claude before it responds —
     forcing Claude to always plan first, then execute the chain.
-
-    This is the key to making the pipeline automatic:
-    the user writes any task → Claude sees the instruction → Claude plans + calls chain.
 #>
 
 # ── Read chain config ──────────────────────────────────────────
 $configPath = ".claude\dispatcher.config.json"
-$chain = @("gemini")  # default if config missing
+$chain = @()
+$chainStr = "gemini (default)"
 
 try {
     if (Test-Path $configPath) {
         $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        $chain = $config.chain
+        if ($config.chain) {
+            # chain is array of {agent, role} objects — build readable summary
+            $parts = @()
+            foreach ($step in $config.chain) {
+                if ($step.agent -and $step.role) {
+                    $parts += "$($step.agent):$($step.role)"
+                } elseif ($step -is [string]) {
+                    $parts += $step
+                }
+            }
+            $chainStr = $parts -join " -> "
+        }
     }
 } catch { }
-
-$chainStr = $chain -join " → "
 
 # ── Read user prompt from stdin (Claude Code passes it as JSON) ──
 $prompt = ""
@@ -32,7 +39,12 @@ try {
     $raw = [Console]::In.ReadToEnd()
     if ($raw.Trim()) {
         $parsed = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue
-        $prompt = $parsed.prompt ?? $parsed.message ?? ""
+        if ($parsed) {
+            # PS 5.1 compatible: no ?? or ?. operators
+            if ($parsed.prompt)  { $prompt = $parsed.prompt }
+            elseif ($parsed.message) { $prompt = $parsed.message }
+            elseif ($parsed.content) { $prompt = $parsed.content }
+        }
     }
 } catch { }
 
@@ -40,45 +52,48 @@ if (-not $prompt -and $env:CLAUDE_USER_PROMPT) {
     $prompt = $env:CLAUDE_USER_PROMPT
 }
 
-# ── Detect if this is a simple question (skip chain for those) ──
+# ── Detect simple questions — skip chain for those ────────────
 $isSimpleQuestion = $false
 $questionPatterns = @(
     '^\s*что такое ', '^\s*what is ', '^\s*как работает ', '^\s*how does ',
     '^\s*объясни ', '^\s*explain ', '^\s*почему ', '^\s*why ',
-    '^\s*привет', '^\s*hello', '^\s*hi ', '^\s*помоги понять'
+    '^\s*привет', '^\s*hello', '^\s*hi ', '^\s*помоги понять',
+    '^\s*покажи ', '^\s*show me '
 )
 $promptLower = $prompt.ToLower()
+
 foreach ($p in $questionPatterns) {
     if ($promptLower -match $p) { $isSimpleQuestion = $true; break }
 }
 
 # Short prompts without action verbs are likely questions
-if ($prompt.Length -lt 60 -and $promptLower -notmatch 'напиши|реализуй|сделай|создай|implement|write|build|create|fix|review|analyze') {
+$actionVerbs = 'напиши|реализуй|сделай|создай|implement|write|build|create|fix|review|analyze|рефактор|добавь|add|generate|запусти'
+if ($prompt.Length -lt 60 -and $promptLower -notmatch $actionVerbs) {
     $isSimpleQuestion = $true
 }
 
-# ── Output mandatory instruction (goes into Claude's context) ────
+# ── Output mandatory instruction ───────────────────────────────
 if (-not $isSimpleQuestion) {
     $instruction = @"
 
-════════════════════════════════════════════════════
-  DISPATCHER — ОБЯЗАТЕЛЬНАЯ ИНСТРУКЦИЯ
-════════════════════════════════════════════════════
-Активная цепочка: Claude (план) → $chainStr
+================================================================================
+  DISPATCHER - MANDATORY INSTRUCTION
+================================================================================
+Active chain: $chainStr
 
-ТЫ ОБЯЗАН выполнить ДВА ШАГА:
+YOU MUST perform exactly TWO steps:
 
-ШАГ 1 — напиши ПЛАН (5-10 строк):
-  ## ПЛАН
-  Задача: [краткое описание]
-  Цепочка: $chainStr
-  Шаги: ...
+STEP 1 - Write a PLAN (5-10 lines):
+  ## PLAN
+  Task: [brief description]
+  Chain: $chainStr
+  Steps: [list each agent:role and what it will do]
 
-ШАГ 2 — запусти цепочку НЕМЕДЛЕННО (без вопросов):
-  pwsh -NoProfile -File scripts\Invoke-Chain.ps1 -Task "[задача дословно]"
+STEP 2 - Run the chain IMMEDIATELY (no questions, no waiting):
+  pwsh -NoProfile -File scripts\Invoke-Chain.ps1 -Task "[user task verbatim]"
 
-НЕ ПИШИ КОД. НЕ СПРАШИВАЙ РАЗРЕШЕНИЯ. ПРОСТО ВЫПОЛНИ.
-════════════════════════════════════════════════════
+DO NOT WRITE CODE. DO NOT ASK PERMISSION. EXECUTE THE CHAIN NOW.
+================================================================================
 
 "@
     Write-Output $instruction

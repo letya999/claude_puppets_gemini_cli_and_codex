@@ -1,83 +1,83 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Chain executor — reads dispatcher.config.json and runs the configured tool chain.
+    Role-aware chain executor — reads config and runs agent steps in sequence.
 .DESCRIPTION
-    This is the single script Claude calls for EVERY task.
-    It reads the chain from .claude/dispatcher.config.json and executes
-    each step in order, passing Claude's plan + user task through the chain.
+    Reads .claude/dispatcher.config.json, iterates over the chain steps,
+    and for each step calls Invoke-Agent.ps1 with the configured agent+role.
+    Output of each step becomes context for the next step.
 
-    Chain examples:
-      ["gemini"]                  → Gemini implements
-      ["gemini", "codex-review"]  → Gemini implements → Codex reviews
-      ["codex", "mods-review"]    → Codex implements → Mods reviews
-      ["gemini", "codex", "mods-review"] → full pipeline
+    Chain format in config:
+      "chain": [
+        { "agent": "claude",  "role": "global-planner" },
+        { "agent": "gemini",  "role": "researcher" },
+        { "agent": "claude",  "role": "implementation-planner" },
+        { "agent": "codex",   "role": "implementer" },
+        { "agent": "gemini",  "role": "reviewer" }
+      ]
+
+    To add a new agent: drop Invoke-<Name>Agent.ps1 into scripts/agents/
+    To add a new role: drop <role>.md into .claude/roles/
 
 .PARAMETER Task
-    The user's original task (passed verbatim from Claude).
-.PARAMETER Plan
-    Claude's plan text (optional, passed as context to first tool in chain).
+    The user's task (passed verbatim from Claude's plan step).
 .PARAMETER ContextFile
-    Optional file to include as context (source file to modify, etc.)
+    Optional file to include as context for the chain.
 .PARAMETER ConfigPath
-    Path to dispatcher.config.json. Default: .claude\dispatcher.config.json
-.EXAMPLE
-    pwsh -NoProfile -File scripts\Invoke-Chain.ps1 -Task "Напиши FastAPI endpoint для регистрации"
-    pwsh -NoProfile -File scripts\Invoke-Chain.ps1 -Task "Рефактори auth.py" -ContextFile "src\auth.py"
+    Path to dispatcher config. Default: .claude\dispatcher.config.json
+.PARAMETER DryRun
+    Print what would run without executing API calls.
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)]
-    [string]$Task,
-
-    [Parameter()]
-    [string]$Plan = "",
-
-    [Parameter()]
-    [string]$ContextFile = "",
-
-    [Parameter()]
-    [string]$ConfigPath = ".claude\dispatcher.config.json"
+    [Parameter(Mandatory)] [string]$Task,
+    [Parameter()]          [string]$ContextFile = "",
+    [Parameter()]          [string]$ConfigPath = ".claude\dispatcher.config.json",
+    [Parameter()]          [switch]$DryRun
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
 $scriptDir = $PSScriptRoot
+$rolesDir  = Join-Path (Split-Path $scriptDir -Parent) ".claude\roles"
+$agentsDir = Join-Path $scriptDir "agents"
 
-# ════════════════════════════════════════════════════════════
-# 1. LOAD CONFIG
-# ════════════════════════════════════════════════════════════
-$config = $null
-$chain = @("gemini")  # safe default
-
-try {
-    if (Test-Path $ConfigPath) {
-        $config = Get-Content $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        $chain = $config.chain
-    } else {
-        Write-Host "[WARN] Config not found: $ConfigPath — using default chain: gemini" -ForegroundColor Yellow
-    }
-} catch {
-    Write-Host "[WARN] Config parse error: $_ — using default chain: gemini" -ForegroundColor Yellow
+# ════════════════════════════════════════════════════════════════
+# LOAD CONFIG
+# ════════════════════════════════════════════════════════════════
+if (-not (Test-Path $ConfigPath)) {
+    throw "Config not found: $ConfigPath"
 }
 
-# ════════════════════════════════════════════════════════════
-# 2. SESSION SETUP
-# ════════════════════════════════════════════════════════════
-$timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$sessionDir = Join-Path $env:TEMP "chain-session-$timestamp"
+$rawConfig = Get-Content $ConfigPath -Raw -Encoding UTF8
+try {
+    $config = $rawConfig | ConvertFrom-Json
+} catch {
+    throw "Invalid JSON in ${ConfigPath}: $_"
+}
+
+$chainSteps = $config.chain
+if (-not $chainSteps -or $chainSteps.Count -eq 0) {
+    throw "No chain steps defined in $ConfigPath"
+}
+
+# ════════════════════════════════════════════════════════════════
+# SESSION SETUP
+# ════════════════════════════════════════════════════════════════
+$timestamp  = Get-Date -Format 'yyyyMMdd-HHmmss'
+$sessionDir = Join-Path $env:TEMP "chain-$timestamp"
 New-Item -ItemType Directory -Path $sessionDir -Force | Out-Null
+$logFile    = Join-Path $sessionDir "chain.log"
 
-$log = Join-Path $sessionDir "chain.log"
-
-function Log([string]$msg, [string]$color = 'White') {
+function Log ([string]$msg, [string]$color = 'White') {
     $entry = "[$(Get-Date -Format 'HH:mm:ss')] $msg"
     Write-Host $entry -ForegroundColor $color
-    $entry | Out-File -FilePath $log -Append -Encoding UTF8
+    Add-Content -Path $logFile -Value $entry -Encoding UTF8
 }
 
-function Banner([string]$text, [string]$color = 'Cyan') {
-    $line = "═" * 56
+function Banner ([string]$text, [string]$color = 'Cyan') {
+    $line = "═" * 60
     Write-Host ""
     Write-Host "  $line" -ForegroundColor $color
     Write-Host "  $text" -ForegroundColor $color
@@ -85,184 +85,169 @@ function Banner([string]$text, [string]$color = 'Cyan') {
     Write-Host ""
 }
 
-Banner "CHAIN EXECUTOR  ·  $(($chain -join ' → ').ToUpper())"
+# ════════════════════════════════════════════════════════════════
+# HEADER
+# ════════════════════════════════════════════════════════════════
+$chainSummary = ($chainSteps | ForEach-Object { "$($_.agent):$($_.role)" }) -join " -> "
+Banner "CHAIN: $chainSummary"
 Log "Task: $Task"
-Log "Chain: $($chain -join ' → ')"
-if ($ContextFile) { Log "Context: $ContextFile" }
+Log "Steps: $($chainSteps.Count)"
+Log "Session: $sessionDir"
+if ($DryRun) { Log "DRY RUN — no API calls" 'Yellow' }
 
-# ════════════════════════════════════════════════════════════
-# 3. CHECK TOOLS
-# ════════════════════════════════════════════════════════════
-$tools = @{ Gemini = $false; Codex = $false; Mods = $false }
-try { $tools = & "$scriptDir\Test-Tools.ps1" 2>$null } catch {}
+@{
+    task      = $Task
+    chain     = $chainSteps
+    startedAt = (Get-Date -Format 'o')
+    sessionDir= $sessionDir
+    dryRun    = $DryRun.IsPresent
+} | ConvertTo-Json -Depth 5 | Out-File (Join-Path $sessionDir "manifest.json") -Encoding UTF8
 
-# ════════════════════════════════════════════════════════════
-# 4. BUILD INITIAL CONTEXT
-# ════════════════════════════════════════════════════════════
-# Start with Claude's plan (if provided) + original task
-$currentContext = ""
-if ($Plan) {
-    $currentContext = "## Claude's Plan`n$Plan`n`n"
-}
-$currentContext += "## Task`n$Task"
+# ════════════════════════════════════════════════════════════════
+# EXECUTE CHAIN
+# ════════════════════════════════════════════════════════════════
+$accumulatedContext = ""
+$lastOutputFile     = ""
+$stepResults        = [System.Collections.Generic.List[hashtable]]::new()
 
-$currentOutputFile = ""  # path to last step's output file
+for ($i = 0; $i -lt $chainSteps.Count; $i++) {
+    $step    = $chainSteps[$i]
+    $stepNum = $i + 1
+    $agent   = $step.agent
+    $role    = $step.role
+    $desc    = if ($step.description) { $step.description } else { "$agent performing $role" }
 
-# ════════════════════════════════════════════════════════════
-# 5. EXECUTE CHAIN STEPS
-# ════════════════════════════════════════════════════════════
-$stepNum = 0
-foreach ($step in $chain) {
-    $stepNum++
-    $stepOutputFile = Join-Path $sessionDir "step-$stepNum-$step-output.txt"
+    $safeName       = $role -replace '[^a-zA-Z0-9\-]', '-'
+    $stepOutputFile = Join-Path $sessionDir "step-${stepNum}-${agent}-${safeName}.txt"
 
-    Banner "STEP $stepNum / $($chain.Count)  ·  $($step.ToUpper())" 'Yellow'
-    Log "Executing step: $step" 'Cyan'
+    Banner "STEP $stepNum / $($chainSteps.Count)  |  [$($agent.ToUpper())]  $role" 'Yellow'
+    Log "Step $stepNum: $agent -> $role  ($desc)"
 
-    switch ($step) {
+    # Resolve per-agent config
+    $stepConfig = @{}
+    $agentCfgObj = $config.$agent
+    if ($agentCfgObj) {
+        $agentCfgObj.PSObject.Properties | ForEach-Object { $stepConfig[$_.Name] = $_.Value }
+    }
+    # Step-level inline config overrides agent-level config
+    if ($step.config) {
+        $step.config.PSObject.Properties | ForEach-Object { $stepConfig[$_.Name] = $_.Value }
+    }
 
-        # ── GEMINI — research + implementation ──────────────────
-        "gemini" {
-            if (-not $tools.Gemini) {
-                Log "Gemini not in PATH — skipping, falling to next step" 'Yellow'
-                continue
-            }
+    if ($DryRun) {
+        Log "  [DRY RUN] Agent=$agent Role=$role Config=$($stepConfig | ConvertTo-Json -Compress)" 'DarkCyan'
+        $dryOut = "[DRY RUN] Placeholder output for step $stepNum ($agent:$role)"
+        $dryOut | Out-File $stepOutputFile -Encoding UTF8
+        $accumulatedContext += "`n--- Step $stepNum ($agent:$role) [DRY RUN] ---`n$dryOut`n"
+        $lastOutputFile = $stepOutputFile
+        $stepResults.Add(@{ step=$stepNum; agent=$agent; role=$role; success=$true; dryRun=$true })
+        continue
+    }
 
-            $geminiModel = if ($config?.gemini?.model) { $config.gemini.model } else { "gemini-2.5-pro" }
-            $geminiRetries = if ($config?.gemini?.retries) { $config.gemini.retries } else { 1 }
+    # Execute agent
+    $stepSuccess = $false
+    try {
+        $result = & "$scriptDir\Invoke-Agent.ps1" `
+            -Agent       $agent `
+            -Role        $role `
+            -Task        $Task `
+            -Context     $accumulatedContext `
+            -ContextFile $ContextFile `
+            -OutputFile  $stepOutputFile `
+            -StepConfig  $stepConfig `
+            -RolesDir    $rolesDir `
+            -AgentsDir   $agentsDir
 
-            # Build prompt with chain context
-            $geminiTask = if ($currentOutputFile -and (Test-Path $currentOutputFile)) {
-                "Previous step output:`n$(Get-Content $currentOutputFile -Raw)`n`nNow: $Task"
-            } else {
-                $Task
-            }
+        $lastOutputFile = $result.OutputFile
+        $stepOutput = Get-Content $lastOutputFile -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+        $accumulatedContext += "`n=== Step $stepNum: $agent -> $role ===`n$stepOutput`n"
+        $stepSuccess = $true
+        Log "Step $stepNum done: $lastOutputFile" 'Green'
 
-            $result = & "$scriptDir\Invoke-GeminiDelegate.ps1" `
-                -Task $geminiTask `
-                -Context $currentContext `
-                -ContextFile $ContextFile `
-                -Model $geminiModel `
-                -MaxRetries $geminiRetries `
-                -OutputFile $stepOutputFile
+    } catch {
+        Log "Step $stepNum FAILED ($agent:$role): $_" 'Red'
 
-            $currentOutputFile = $result.OutputFile
-            $currentContext = Get-Content $currentOutputFile -Raw -Encoding UTF8
-            Log "Gemini done → $stepOutputFile" 'Green'
-        }
-
-        # ── CODEX — code generation ──────────────────────────────
-        "codex" {
-            if (-not $tools.Codex) {
-                Log "Codex not in PATH — skipping" 'Yellow'
-                continue
-            }
-
-            $lang = if ($config?.codex?.language) { $config.codex.language } else { "python" }
-
-            $codexTask = if ($currentOutputFile -and (Test-Path $currentOutputFile)) {
-                "Based on this context, implement:`n$(Get-Content $currentOutputFile -Raw -ErrorAction SilentlyContinue | Select-Object -First 200)`n`nTask: $Task"
-            } else {
-                $Task
-            }
-
-            $result = & "$scriptDir\Invoke-CodexDelegate.ps1" `
-                -Task $codexTask `
-                -ContextFile $ContextFile `
-                -Language $lang `
-                -OutputFile $stepOutputFile
-
-            $currentOutputFile = $result.OutputFile
-            $currentContext = Get-Content $currentOutputFile -Raw -Encoding UTF8
-            Log "Codex done → $stepOutputFile" 'Green'
-        }
-
-        # ── MODS-REVIEW — full review + fixes ───────────────────
-        "mods-review" {
-            if (-not $tools.Mods) {
-                Log "Mods not in PATH — skipping review" 'Yellow'
-                continue
-            }
-            if (-not $currentOutputFile -or -not (Test-Path $currentOutputFile)) {
-                Log "No previous output to review — skipping mods" 'Yellow'
-                continue
-            }
-
-            $reviewType = if ($config?.'mods-review'?.type) { $config.'mods-review'.type } else { "full" }
-            $applyFixes = if ($config?.'mods-review'?.applyFixes) { $config.'mods-review'.applyFixes } else { $true }
-
-            $modsParams = @{
-                InputFile  = $currentOutputFile
-                ReviewType = $reviewType
-                OutputFile = $stepOutputFile
-            }
-            if ($applyFixes) { $modsParams['ApplyFixes'] = $true }
-
-            $result = & "$scriptDir\Invoke-ModsReview.ps1" @modsParams
-            $currentOutputFile = $result.OutputFile
-            $currentContext = Get-Content $currentOutputFile -Raw -Encoding UTF8
-            Log "Mods review done → $stepOutputFile" 'Green'
-        }
-
-        # ── CODEX-REVIEW — code review via codex/mods ───────────
-        "codex-review" {
-            if (-not $currentOutputFile -or -not (Test-Path $currentOutputFile)) {
-                Log "No output to review — skipping codex-review" 'Yellow'
-                continue
-            }
-
-            # Use mods if available, otherwise skip
-            if ($tools.Mods) {
-                $reviewType = if ($config?.'codex-review'?.type) { $config.'codex-review'.type } else { "security" }
-                $result = & "$scriptDir\Invoke-ModsReview.ps1" `
-                    -InputFile $currentOutputFile `
-                    -ReviewType $reviewType `
+        # Try fallback if defined in chain step
+        if ($step.fallback) {
+            $fbAgent = $step.fallback.agent
+            $fbRole  = $step.fallback.role
+            Log "  Fallback: $fbAgent -> $fbRole" 'Yellow'
+            try {
+                $result = & "$scriptDir\Invoke-Agent.ps1" `
+                    -Agent      $fbAgent `
+                    -Role       $fbRole `
+                    -Task       $Task `
+                    -Context    $accumulatedContext `
                     -OutputFile $stepOutputFile `
-                    -ApplyFixes
-                $currentOutputFile = $result.OutputFile
-                Log "Codex-review (mods) done → $stepOutputFile" 'Green'
-            } else {
-                Log "Mods not available for codex-review — skipping" 'Yellow'
+                    -StepConfig $stepConfig `
+                    -RolesDir   $rolesDir `
+                    -AgentsDir  $agentsDir
+
+                $lastOutputFile = $result.OutputFile
+                $stepOutput = Get-Content $lastOutputFile -Raw -Encoding UTF8
+                $accumulatedContext += "`n=== Step $stepNum FALLBACK ($fbAgent:$fbRole) ===`n$stepOutput`n"
+                $stepSuccess = $true
+                Log "  Fallback OK: $lastOutputFile" 'Green'
+            } catch {
+                Log "  Fallback failed: $_" 'Red'
             }
         }
+    }
 
-        default {
-            Log "Unknown chain step: '$step' — skipping" 'Yellow'
-        }
+    $stepResults.Add(@{
+        step       = $stepNum
+        agent      = $agent
+        role       = $role
+        outputFile = $lastOutputFile
+        success    = $stepSuccess
+    })
+
+    if (-not $stepSuccess -and -not $step.optional) {
+        Log "Non-optional step failed — stopping chain" 'Red'
+        break
     }
 }
 
-# ════════════════════════════════════════════════════════════
-# 6. FINAL OUTPUT — print for Claude to consume
-# ════════════════════════════════════════════════════════════
-Banner "CHAIN COMPLETE  ·  RESULT FOR CLAUDE" 'Green'
+# ════════════════════════════════════════════════════════════════
+# FINAL OUTPUT
+# ════════════════════════════════════════════════════════════════
+Banner "CHAIN COMPLETE" 'Green'
 
-if ($currentOutputFile -and (Test-Path $currentOutputFile)) {
-    Log "Final output file: $currentOutputFile" 'Cyan'
-    Write-Host ""
-    Write-Host "━━━ OUTPUT START (Claude: read and apply via Edit tool) ━━━" -ForegroundColor DarkCyan
-
-    $outputLines = Get-Content $currentOutputFile -Encoding UTF8
-    $outputLines | Select-Object -First 150 | Write-Host
-    if ($outputLines.Count -gt 150) {
-        Write-Host "  ... [+$($outputLines.Count - 150) lines — full output at: $currentOutputFile]" -ForegroundColor DarkGray
-    }
-
-    Write-Host "━━━ OUTPUT END ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkCyan
-    Write-Host ""
-    Write-Host "  CLAUDE: Apply the above to the target file using Edit tool." -ForegroundColor Yellow
-    Write-Host "  Full file: $currentOutputFile" -ForegroundColor DarkGray
-    Write-Host "  Session:   $sessionDir" -ForegroundColor DarkGray
-} else {
-    Write-Host "[WARN] No output was generated. Check logs at: $log" -ForegroundColor Red
+Write-Host "  Results:" -ForegroundColor Cyan
+foreach ($r in $stepResults) {
+    $icon  = if ($r.success) { "[OK]  " } else { "[FAIL]" }
+    $color = if ($r.success) { 'Green' } else { 'Red' }
+    Write-Host ("  $icon  Step {0}: {1} -> {2}" -f $r.step, $r.agent, $r.role) -ForegroundColor $color
 }
 
 Write-Host ""
 
+if ($lastOutputFile -and (Test-Path $lastOutputFile)) {
+    Write-Host "  Final output file:" -ForegroundColor Yellow
+    Write-Host "  $lastOutputFile" -ForegroundColor White
+    Write-Host ""
+    Write-Host "--- OUTPUT START (Claude: read and apply via Edit tool) ---" -ForegroundColor DarkCyan
+
+    $lines = Get-Content $lastOutputFile -Encoding UTF8
+    $lines | Select-Object -First 200 | ForEach-Object { Write-Host $_ }
+    if ($lines.Count -gt 200) {
+        Write-Host "  ... [+$($lines.Count - 200) lines — full: $lastOutputFile]" -ForegroundColor DarkGray
+    }
+
+    Write-Host "--- OUTPUT END ----" -ForegroundColor DarkCyan
+}
+
+Write-Host ""
+Write-Host "  Session: $sessionDir" -ForegroundColor DarkGray
+Write-Host "  Log:     $logFile" -ForegroundColor DarkGray
+Write-Host ""
+
+$allOk = ($stepResults | Where-Object { -not $_.success }).Count -eq 0
 return @{
-    Success        = $true
-    Chain          = $chain
-    FinalOutput    = $currentOutputFile
-    SessionDir     = $sessionDir
-    Log            = $log
+    Success     = $allOk
+    Chain       = $chainSummary
+    FinalOutput = $lastOutputFile
+    SessionDir  = $sessionDir
+    Log         = $logFile
+    StepResults = $stepResults
 }

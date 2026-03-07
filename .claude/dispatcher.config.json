@@ -1,42 +1,83 @@
 {
-  "_comment": "Настрой свою цепочку здесь. Claude читает этот файл автоматически.",
+  "_comment": "Настрой цепочку здесь. Каждый шаг: agent + role. Роли читаются из .claude/roles/",
 
-  "chain": ["gemini"],
+  "chain": [
+    {
+      "agent": "gemini",
+      "role": "researcher",
+      "description": "Gemini researches best practices and patterns",
+      "fallback": { "agent": "claude", "role": "researcher" }
+    },
+    {
+      "agent": "claude",
+      "role": "implementation-planner",
+      "description": "Claude turns research into precise implementation spec for Codex"
+    },
+    {
+      "agent": "codex",
+      "role": "implementer",
+      "description": "Codex writes production-ready code from the spec",
+      "fallback": { "agent": "gemini", "role": "implementer" }
+    },
+    {
+      "agent": "gemini",
+      "role": "reviewer",
+      "description": "Gemini reviews Codex output for correctness and security",
+      "fallback": { "agent": "mods", "role": "reviewer" }
+    }
+  ],
 
-  "_chain_examples": {
-    "claude_plus_gemini":        ["gemini"],
-    "claude_plus_gemini_review": ["gemini", "codex-review"],
-    "claude_plus_codex_review":  ["codex", "mods-review"],
-    "gemini_only_no_review":     ["gemini"],
-    "full_pipeline":             ["gemini", "codex", "mods-review"]
+  "_presets": {
+    "_comment": "Copy any preset value into 'chain' above to switch mode",
+
+    "claude_then_gemini": [
+      { "agent": "gemini",  "role": "researcher" },
+      { "agent": "claude",  "role": "implementation-planner" },
+      { "agent": "gemini",  "role": "implementer" }
+    ],
+
+    "full_pipeline_with_validation": [
+      { "agent": "gemini", "role": "researcher" },
+      { "agent": "claude", "role": "implementation-planner" },
+      { "agent": "codex",  "role": "implementer" },
+      { "agent": "gemini", "role": "reviewer" },
+      { "agent": "claude", "role": "validator" }
+    ],
+
+    "gemini_only": [
+      { "agent": "gemini", "role": "researcher" },
+      { "agent": "gemini", "role": "implementer" }
+    ],
+
+    "codex_plus_mods": [
+      { "agent": "codex", "role": "implementer" },
+      { "agent": "mods",  "role": "reviewer" }
+    ],
+
+    "research_only": [
+      { "agent": "gemini", "role": "researcher" }
+    ]
   },
 
   "gemini": {
     "model": "gemini-2.5-pro",
-    "timeout": 120,
     "retries": 1
   },
 
   "codex": {
-    "language": "python",
-    "quiet": true,
+    "language": "auto",
     "retries": 1
   },
 
-  "mods-review": {
-    "type": "full",
-    "applyFixes": true
+  "mods": {
+    "type": "full"
   },
 
-  "codex-review": {
-    "type": "security",
-    "applyFixes": true
+  "claude": {
+    "model": "claude-sonnet-4-6"
   },
 
   "options": {
-    "planRequired": true,
-    "autoExecute": true,
-    "saveSessionTo": "$env:TEMP",
-    "pasteResultToClipboard": false
+    "saveSessionTo": "$env:TEMP"
   }
 }
