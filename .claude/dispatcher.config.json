@@ -1,62 +1,81 @@
 {
-  "_comment": "Настрой цепочку здесь. Каждый шаг: agent + role. Роли читаются из .claude/roles/",
+  "_comment": "Chain config. Each step: agent+role OR model+role. Roles from .claude/roles/",
 
   "chain": [
     {
       "agent": "gemini",
+      "model": "gemini-2.5-pro",
       "role": "researcher",
       "description": "Gemini researches best practices and patterns",
       "fallback": { "agent": "claude", "role": "researcher" }
     },
     {
       "agent": "claude",
+      "model": "claude-sonnet-4-6",
       "role": "implementation-planner",
-      "description": "Claude turns research into precise implementation spec for Codex"
+      "description": "Claude turns research into precise Codex-ready spec"
     },
     {
       "agent": "codex",
+      "model": "gpt-5.3-codex",
       "role": "implementer",
-      "description": "Codex writes production-ready code from the spec",
+      "description": "Codex writes production-ready code from spec",
+      "yolo": true,
       "fallback": { "agent": "gemini", "role": "implementer" }
     },
     {
       "agent": "gemini",
+      "model": "gemini-2.5-pro",
       "role": "reviewer",
-      "description": "Gemini reviews Codex output for correctness and security",
+      "description": "Gemini reviews Codex output",
       "fallback": { "agent": "mods", "role": "reviewer" }
     }
   ],
 
   "_presets": {
-    "_comment": "Copy any preset value into 'chain' above to switch mode",
+    "_comment": "Copy a preset 'chain' value above to switch mode. See SETUP.md.",
 
-    "claude_then_gemini": [
-      { "agent": "gemini",  "role": "researcher" },
-      { "agent": "claude",  "role": "implementation-planner" },
-      { "agent": "gemini",  "role": "implementer" }
+    "research_then_implement": [
+      { "agent": "gemini", "model": "gemini-2.5-pro", "role": "researcher" },
+      { "agent": "claude", "model": "claude-sonnet-4-6", "role": "implementation-planner" },
+      { "agent": "codex",  "model": "gpt-5.3-codex", "role": "implementer", "yolo": true }
     ],
 
-    "full_pipeline_with_validation": [
-      { "agent": "gemini", "role": "researcher" },
-      { "agent": "claude", "role": "implementation-planner" },
-      { "agent": "codex",  "role": "implementer" },
-      { "agent": "gemini", "role": "reviewer" },
-      { "agent": "claude", "role": "validator" }
+    "full_with_validation": [
+      { "agent": "gemini", "model": "gemini-2.5-pro", "role": "researcher" },
+      { "agent": "claude", "model": "claude-sonnet-4-6", "role": "implementation-planner" },
+      { "agent": "codex",  "model": "gpt-5.3-codex", "role": "implementer", "yolo": true },
+      { "agent": "gemini", "model": "gemini-2.5-pro", "role": "reviewer" },
+      { "agent": "claude", "model": "claude-sonnet-4-6", "role": "validator" }
     ],
 
     "gemini_only": [
-      { "agent": "gemini", "role": "researcher" },
-      { "agent": "gemini", "role": "implementer" }
+      { "agent": "gemini", "model": "gemini-2.5-pro", "role": "researcher" },
+      { "agent": "gemini", "model": "gemini-2.5-pro", "role": "implementer" }
     ],
 
-    "codex_plus_mods": [
-      { "agent": "codex", "role": "implementer" },
-      { "agent": "mods",  "role": "reviewer" }
+    "codex_plus_review": [
+      { "agent": "codex",  "model": "gpt-5.3-codex", "role": "implementer", "yolo": true },
+      { "agent": "gemini", "model": "gemini-2.5-pro", "role": "reviewer" }
     ],
 
     "research_only": [
-      { "agent": "gemini", "role": "researcher" }
+      { "agent": "gemini", "model": "gemini-2.5-pro", "role": "researcher" }
+    ],
+
+    "claude_plan_gemini_execute": [
+      { "agent": "gemini", "model": "gemini-2.5-pro", "role": "implementer" }
     ]
+  },
+
+  "model_guidance": {
+    "_comment": "Used by Run-Agent.ps1 for automatic model routing",
+    "research":    "gemini-2.5-pro",
+    "implement":   "gpt-5.3-codex",
+    "review":      "gemini-2.5-pro",
+    "plan":        "claude-sonnet-4-6",
+    "validate":    "claude-sonnet-4-6",
+    "fast":        "claude-haiku-4-5"
   },
 
   "gemini": {
@@ -65,19 +84,18 @@
   },
 
   "codex": {
-    "language": "auto",
+    "model": "gpt-5.3-codex",
+    "yolo": true,
     "retries": 1
   },
 
-  "mods": {
-    "type": "full"
-  },
+  "mods": {},
 
   "claude": {
     "model": "claude-sonnet-4-6"
   },
 
   "options": {
-    "saveSessionTo": "$env:TEMP"
+    "artifactsDir": ".orchestrate"
   }
 }

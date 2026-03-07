@@ -95,7 +95,9 @@ $success = $false
 
 try {
     # Primary: pipe prompt via stdin to claude -p
-    $output = $prompt | & claude -p 2>&1
+    # --dangerously-skip-permissions = YOLO mode: no tool-use confirmations
+    # This is needed for sub-agent to run autonomously without blocking on prompts.
+    $output = $prompt | & claude -p --dangerously-skip-permissions 2>&1
     if ($LASTEXITCODE -eq 0 -or $output) {
         $success = $true
     }
@@ -108,7 +110,7 @@ if (-not $success) {
         # Fallback: save prompt to temp file, pass as argument
         $tmpPrompt = Join-Path $env:TEMP "claude-agent-prompt-$(Get-Date -Format 'HHmmss').txt"
         $prompt | Out-File $tmpPrompt -Encoding UTF8
-        $output = & claude -p (Get-Content $tmpPrompt -Raw) 2>&1
+        $output = & claude -p --dangerously-skip-permissions (Get-Content $tmpPrompt -Raw) 2>&1
         Remove-Item $tmpPrompt -ErrorAction SilentlyContinue
         if ($output) { $success = $true }
     } catch {

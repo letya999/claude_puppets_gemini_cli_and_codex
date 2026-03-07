@@ -134,14 +134,20 @@ while ($attempt -le $MaxRetries -and -not $success) {
     try {
         $errorFile = [System.IO.Path]::ChangeExtension($OutputFile, '.error.txt')
 
-        # codex -q for quiet/non-interactive mode
-        $output = & codex -q $prompt 2>$errorFile
+        # YOLO mode: --dangerously-bypass-approvals-and-sandbox
+        # This skips ALL sandboxing — unrestricted filesystem + network access.
+        # Safe alternative: --sandbox workspace-write (writes to workspace only)
+        # Read-only alternative: --sandbox read-only
+        $output = $prompt | & codex exec `
+            -m ($MaxRetries -gt 0 ? "gpt-5.3-codex" : "gpt-4o") `
+            --dangerously-bypass-approvals-and-sandbox `
+            --json - 2>$errorFile
 
         if ($LASTEXITCODE -eq 0 -and $output) {
             $success = $true
         } else {
-            # Try stdin
-            $output = $prompt | & codex 2>$errorFile
+            # Fallback: legacy codex CLI syntax
+            $output = & codex -q $prompt 2>$errorFile
             if ($output) { $success = $true }
         }
     } catch {
