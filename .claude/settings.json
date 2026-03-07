@@ -1,0 +1,18 @@
+{
+  "skills": {
+    "directory": ".claude/skills"
+  },
+  "env": {
+    "DISPATCHER_PROJECT_ROOT": "."
+  },
+  "permissions": {
+    "allow": [
+      "Bash(scripts/*.ps1)",
+      "Bash(gemini*)",
+      "Bash(codex*)",
+      "Bash(mods*)",
+      "Read($env:TEMP/dispatcher-*/**)",
+      "Write($env:TEMP/dispatcher-*/**)"
+    ]
+  }
+}
