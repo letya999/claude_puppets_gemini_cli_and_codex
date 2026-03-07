@@ -1,0 +1,42 @@
+{
+  "_comment": "Настрой свою цепочку здесь. Claude читает этот файл автоматически.",
+
+  "chain": ["gemini"],
+
+  "_chain_examples": {
+    "claude_plus_gemini":        ["gemini"],
+    "claude_plus_gemini_review": ["gemini", "codex-review"],
+    "claude_plus_codex_review":  ["codex", "mods-review"],
+    "gemini_only_no_review":     ["gemini"],
+    "full_pipeline":             ["gemini", "codex", "mods-review"]
+  },
+
+  "gemini": {
+    "model": "gemini-2.5-pro",
+    "timeout": 120,
+    "retries": 1
+  },
+
+  "codex": {
+    "language": "python",
+    "quiet": true,
+    "retries": 1
+  },
+
+  "mods-review": {
+    "type": "full",
+    "applyFixes": true
+  },
+
+  "codex-review": {
+    "type": "security",
+    "applyFixes": true
+  },
+
+  "options": {
+    "planRequired": true,
+    "autoExecute": true,
+    "saveSessionTo": "$env:TEMP",
+    "pasteResultToClipboard": false
+  }
+}
