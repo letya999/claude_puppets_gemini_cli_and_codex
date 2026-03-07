@@ -24,7 +24,9 @@
 .PARAMETER ContextFile
     Optional file to include as context for the chain.
 .PARAMETER ConfigPath
-    Path to dispatcher config. Default: .claude\dispatcher.config.json
+    Path to dispatcher config. If omitted, resolved automatically:
+      1. Local project:  <CWD>\.claude\dispatcher.config.json
+      2. Global profile: <this script's parent>\dispatcher.config.json
 .PARAMETER DryRun
     Print what would run without executing API calls.
 #>
@@ -32,20 +34,33 @@
 param(
     [Parameter(Mandatory)] [string]$Task,
     [Parameter()]          [string]$ContextFile = "",
-    [Parameter()]          [string]$ConfigPath = ".claude\dispatcher.config.json",
+    [Parameter()]          [string]$ConfigPath = "",
     [Parameter()]          [switch]$DryRun
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$scriptDir = $PSScriptRoot
-$rolesDir  = Join-Path (Split-Path $scriptDir -Parent) ".claude\roles"
-$agentsDir = Join-Path $scriptDir "agents"
+$scriptDir  = $PSScriptRoot
+$profileDir = Split-Path $scriptDir -Parent
+$rolesDir   = Join-Path $profileDir "roles"
+$agentsDir  = Join-Path $scriptDir "agents"
 
 # ════════════════════════════════════════════════════════════════
-# LOAD CONFIG
+# LOAD CONFIG  (local project overrides global profile)
 # ════════════════════════════════════════════════════════════════
+if (-not $ConfigPath) {
+    $localConfig  = Join-Path $PWD ".claude\dispatcher.config.json"
+    $globalConfig = Join-Path $profileDir "dispatcher.config.json"
+    if (Test-Path $localConfig) {
+        $ConfigPath = $localConfig
+    } elseif (Test-Path $globalConfig) {
+        $ConfigPath = $globalConfig
+    } else {
+        throw "dispatcher.config.json not found (checked: $localConfig, $globalConfig)"
+    }
+}
+
 if (-not (Test-Path $ConfigPath)) {
     throw "Config not found: $ConfigPath"
 }

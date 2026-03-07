@@ -4,22 +4,36 @@
     UserPromptSubmit hook — injects mandatory chain instruction into EVERY prompt.
 .DESCRIPTION
     Runs before Claude processes each user message.
-    Reads dispatcher.config.json to know the current chain,
-    then outputs a MANDATORY INSTRUCTION to stdout.
-    Claude Code shows this output to Claude before it responds —
-    forcing Claude to always plan first, then execute the chain.
+    Config resolution order (first found wins):
+      1. Local project:  <CWD>\.claude\dispatcher.config.json
+      2. Global profile: <this script's parent>\dispatcher.config.json
+
+    Works from ~/.claude/hooks/ (global install) and from .claude/hooks/ (local project).
 #>
 
-# ── Read chain config ──────────────────────────────────────────
-$configPath = ".claude\dispatcher.config.json"
+# ── Resolve config path: local project wins, then global profile ──
+$globalDir        = Split-Path $PSScriptRoot -Parent
+$globalConfigPath = Join-Path $globalDir "dispatcher.config.json"
+$localConfigPath  = Join-Path $PWD ".claude\dispatcher.config.json"
+
+if (Test-Path $localConfigPath) {
+    $configPath = $localConfigPath
+} elseif (Test-Path $globalConfigPath) {
+    $configPath = $globalConfigPath
+} else {
+    $configPath = ""
+}
+
+# ── Absolute path to Invoke-Chain.ps1 (sibling scripts/ folder) ──
+$invokeChain = Join-Path $globalDir "scripts\Invoke-Chain.ps1"
+
 $chain = @()
 $chainStr = "gemini (default)"
 
 try {
-    if (Test-Path $configPath) {
+    if ($configPath -and (Test-Path $configPath)) {
         $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($config.chain) {
-            # chain is array of {agent, role} objects — build readable summary
             $parts = @()
             foreach ($step in $config.chain) {
                 if ($step.agent -and $step.role) {
@@ -90,7 +104,7 @@ STEP 1 - Write a PLAN (5-10 lines):
   Steps: [list each agent:role and what it will do]
 
 STEP 2 - Run the chain IMMEDIATELY (no questions, no waiting):
-  pwsh -NoProfile -File scripts\Invoke-Chain.ps1 -Task "[user task verbatim]"
+  pwsh -NoProfile -File "$invokeChain" -Task "[user task verbatim]"
 
 DO NOT WRITE CODE. DO NOT ASK PERMISSION. EXECUTE THE CHAIN NOW.
 ================================================================================

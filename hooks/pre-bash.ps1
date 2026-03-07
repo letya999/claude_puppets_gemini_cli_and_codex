@@ -50,10 +50,11 @@ $directCodePatterns = @(
 $isDirect = $directCodePatterns | Where-Object { $cmdLower -match $_ }
 
 if ($isDirect) {
+    $invokeChain = Join-Path (Split-Path $PSScriptRoot -Parent) "scripts\Invoke-Chain.ps1"
     $warning = @"
 [DISPATCHER WARNING] Claude is writing code directly instead of delegating.
 Per CLAUDE.md rules: implementation should go through the chain.
-Suggested: pwsh -File scripts\Invoke-Chain.ps1 -Task "..."
+Suggested: pwsh -NoProfile -File "$invokeChain" -Task "..."
 Proceeding anyway (set exit 2 in pre-bash.ps1 to enforce strict mode).
 "@
     Write-Output $warning

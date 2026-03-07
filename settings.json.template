@@ -1,9 +1,12 @@
 {
+  "_comment": "TEMPLATE — do not use directly. Run Install.ps1 to generate settings.json with absolute paths.",
+  "_install": "pwsh $env:USERPROFILE\\.claude\\Install.ps1",
+
   "skills": {
-    "directory": ".claude/skills"
+    "directory": "{{CLAUDE_DIR}}\\skills"
   },
   "env": {
-    "DISPATCHER_PROJECT_ROOT": "."
+    "DISPATCHER_PROFILE_DIR": "{{CLAUDE_DIR}}"
   },
   "hooks": {
     "UserPromptSubmit": [
@@ -11,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File .claude/hooks/on-prompt.ps1"
+            "command": "pwsh -NoProfile -NonInteractive -File \"{{CLAUDE_DIR}}\\hooks\\on-prompt.ps1\""
           }
         ]
       }
@@ -22,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File .claude/hooks/pre-bash.ps1"
+            "command": "pwsh -NoProfile -NonInteractive -File \"{{CLAUDE_DIR}}\\hooks\\pre-bash.ps1\""
           }
         ]
       }
