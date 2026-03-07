@@ -1,4 +1,4 @@
-Пользователь явно вызвал `/codex`. Делегируй реализацию Codex CLI.
+﻿Пользователь явно вызвал `/codex`. Делегируй реализацию Codex CLI.
 
 Задача: $ARGUMENTS
 
@@ -8,7 +8,7 @@
 2. Выполни через Bash:
 
 ```powershell
-pwsh -NoProfile -File scripts\Invoke-CodexDelegate.ps1 `
+powershell -NoProfile -File scripts\Invoke-CodexDelegate.ps1 `
     -Task "$ARGUMENTS" `
     -Language "python"
 ```
@@ -17,7 +17,7 @@ pwsh -NoProfile -File scripts\Invoke-CodexDelegate.ps1 `
 
 ```powershell
 # Путь к файлу вывода Codex берём из предыдущего шага
-pwsh -NoProfile -File scripts\Invoke-ModsReview.ps1 `
+powershell -NoProfile -File scripts\Invoke-ModsReview.ps1 `
     -InputFile "<путь-из-вывода-codex>" `
     -ApplyFixes
 ```

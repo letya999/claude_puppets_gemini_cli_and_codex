@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Bootstrap script — запуск Claude Code с диспетчером в один клик.

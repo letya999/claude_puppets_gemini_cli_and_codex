@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Unified agent runner — routes --Model to the correct CLI automatically.
@@ -298,7 +298,21 @@ try {
     }
 
     $errorFile = Join-Path $logDir "stderr.log"
-    $output = $composed | & $cli @cliRest 2>$errorFile
+    # Temporarily set Continue so native-command stderr (e.g. Gemini MCP messages)
+    # doesn't throw NativeCommandError under $ErrorActionPreference = 'Stop' (PS 5.1).
+    $oldErrPref = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        # Gemini requires -p flag for headless/non-interactive mode; piping via stdin
+        # triggers interactive mode and produces no output.
+        if ($harness -eq 'gemini') {
+            $output = & $cli @cliRest '-p' $composed 2>$errorFile
+        } else {
+            $output = $composed | & $cli @cliRest 2>$errorFile
+        }
+    } finally {
+        $ErrorActionPreference = $oldErrPref
+    }
     $exitCode = $LASTEXITCODE
 
     if ($exitCode -eq 0 -and $output) {

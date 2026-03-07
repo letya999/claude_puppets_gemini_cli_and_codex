@@ -1,4 +1,4 @@
-Пользователь вызвал `/review`. Запусти Mods для ревью кода.
+﻿Пользователь вызвал `/review`. Запусти Mods для ревью кода.
 
 Аргументы: $ARGUMENTS
 
@@ -8,7 +8,7 @@
 
 **Если это путь к файлу** (заканчивается на .py, .ps1, .js, .ts, .go, etc.):
 ```powershell
-pwsh -NoProfile -File scripts\Invoke-ModsReview.ps1 `
+powershell -NoProfile -File scripts\Invoke-ModsReview.ps1 `
     -InputFile "$ARGUMENTS" `
     -ReviewType "full" `
     -ApplyFixes
@@ -31,7 +31,7 @@ pwsh -NoProfile -File scripts\Invoke-ModsReview.ps1 `
 
 Пример с типом:
 ```powershell
-pwsh -NoProfile -File scripts\Invoke-ModsReview.ps1 `
+powershell -NoProfile -File scripts\Invoke-ModsReview.ps1 `
     -InputFile "src\auth.py" `
     -ReviewType "security" `
     -ApplyFixes

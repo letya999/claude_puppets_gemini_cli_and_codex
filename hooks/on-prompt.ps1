@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     UserPromptSubmit hook — injects mandatory chain instruction into EVERY prompt.
@@ -104,7 +104,7 @@ STEP 1 - Write a PLAN (5-10 lines):
   Steps: [list each agent:role and what it will do]
 
 STEP 2 - Run the chain IMMEDIATELY (no questions, no waiting):
-  pwsh -NoProfile -File "$invokeChain" -Task "[user task verbatim]"
+  powershell -NoProfile -File "$invokeChain" -Task "[user task verbatim]"
 
 DO NOT WRITE CODE. DO NOT ASK PERMISSION. EXECUTE THE CHAIN NOW.
 ================================================================================

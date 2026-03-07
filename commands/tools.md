@@ -1,11 +1,11 @@
-Пользователь вызвал `/tools`. Проверь доступность всех CLI инструментов.
+﻿Пользователь вызвал `/tools`. Проверь доступность всех CLI инструментов.
 
 ## ДЕЙСТВИЕ
 
 Выполни немедленно:
 
 ```powershell
-pwsh -NoProfile -File scripts\Test-Tools.ps1
+powershell -NoProfile -File scripts\Test-Tools.ps1
 ```
 
 Затем выведи итог в формате:
@@ -42,5 +42,5 @@ npm install -g @openai/codex
 winget install charmbracelet.mods
 
 # Настройка ключей
-pwsh -NoProfile -File scripts\Set-DispatcherEnv.ps1 -Persist
+powershell -NoProfile -File scripts\Set-DispatcherEnv.ps1 -Persist
 ```

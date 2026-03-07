@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Gemini sub-agent — runs Gemini CLI for a specific role in the chain.
@@ -115,9 +115,21 @@ while ($attempt -le $MaxRetries -and -not $success) {
 
     try {
         $errorFile = [System.IO.Path]::ChangeExtension($OutputFile, '.error.txt')
+        
+        $geminiArgs = @("--model", $Model)
+        if ($env:GEMINI_API_KEY) {
+            $geminiArgs += "--api-key", "$env:GEMINI_API_KEY"
+        }
+        $geminiArgs += "-p", $prompt
 
-        # Try stdin pipe first
-        $output = $prompt | & gemini --model $Model 2>$errorFile
+        # Temporarily disable Stop on error so stderr doesn't throw NativeCommandError in PS 5.1
+        $oldErrPref = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $output = & gemini @geminiArgs 2>$errorFile
+        } finally {
+            $ErrorActionPreference = $oldErrPref
+        }
 
         if ($LASTEXITCODE -eq 0 -and $output) {
             $success = $true
@@ -127,14 +139,6 @@ while ($attempt -le $MaxRetries -and -not $success) {
         }
     } catch {
         Write-Host "  [WARN] Attempt $($attempt+1): $_" -ForegroundColor Yellow
-
-        # Fallback: -p argument mode
-        if (-not $success) {
-            try {
-                $output = & gemini --model $Model -p $prompt 2>$null
-                if ($output) { $success = $true }
-            } catch { }
-        }
     }
     $attempt++
 }

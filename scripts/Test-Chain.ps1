@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Validates the chain configuration and tests workability without API calls.
@@ -20,8 +20,8 @@
 .PARAMETER Fix
     Attempt to auto-fix common issues (create missing role stubs).
 .EXAMPLE
-    pwsh -File scripts\Test-Chain.ps1
-    pwsh -File scripts\Test-Chain.ps1 -Fix
+    powershell -File scripts\Test-Chain.ps1
+    powershell -File scripts\Test-Chain.ps1 -Fix
 #>
 [CmdletBinding()]
 param(
@@ -266,7 +266,7 @@ if ($fail -eq 0 -and $warn -eq 0) {
 } else {
     Write-Host "  Fix the FAIL items before running the chain." -ForegroundColor Red
     Write-Host "  Quick fixes:" -ForegroundColor Yellow
-    Write-Host "    API keys:   pwsh -File scripts\Set-DispatcherEnv.ps1 -Persist" -ForegroundColor DarkGray
+    Write-Host "    API keys:   powershell -File scripts\Set-DispatcherEnv.ps1 -Persist" -ForegroundColor DarkGray
     Write-Host "    Gemini CLI: npm install -g @google/generative-ai-cli" -ForegroundColor DarkGray
     Write-Host "    Codex CLI:  npm install -g @openai/codex" -ForegroundColor DarkGray
     Write-Host "    Mods CLI:   winget install charmbracelet.mods" -ForegroundColor DarkGray

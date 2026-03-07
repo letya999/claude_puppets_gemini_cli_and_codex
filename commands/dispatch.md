@@ -1,11 +1,11 @@
-Ты — Planner/Dispatcher. Пользователь запустил `/dispatch $ARGUMENTS`.
+﻿Ты — Planner/Dispatcher. Пользователь запустил `/dispatch $ARGUMENTS`.
 
 ## НЕМЕДЛЕННОЕ ДЕЙСТВИЕ
 
 Вызови центральный роутер через Bash:
 
 ```
-pwsh -NoProfile -File scripts\Invoke-Router.ps1 -Task "$ARGUMENTS"
+powershell -NoProfile -File scripts\Invoke-Router.ps1 -Task "$ARGUMENTS"
 ```
 
 Роутер сам определит нужный инструмент (Gemini/Codex/Mods) и выполнит задачу.
@@ -25,10 +25,10 @@ pwsh -NoProfile -File scripts\Invoke-Router.ps1 -Task "$ARGUMENTS"
 /dispatch <задача> --dry-run              # показать план без выполнения
 ```
 
-Для `--force` и `--dry-run` добавь параметры в pwsh команду:
+Для `--force` и `--dry-run` добавь параметры в powershell команду:
 ```
-pwsh -File scripts\Invoke-Router.ps1 -Task "<задача>" -Force gemini
-pwsh -File scripts\Invoke-Router.ps1 -Task "<задача>" -DryRun
+powershell -File scripts\Invoke-Router.ps1 -Task "<задача>" -Force gemini
+powershell -File scripts\Invoke-Router.ps1 -Task "<задача>" -DryRun
 ```
 
 ## СТРОГО ЗАПРЕЩЕНО

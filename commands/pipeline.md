@@ -1,11 +1,11 @@
-Пользователь вызвал `/pipeline`. Запусти полный автоматический конвейер.
+﻿Пользователь вызвал `/pipeline`. Запусти полный автоматический конвейер.
 
 Задача: $ARGUMENTS
 
 ## ДЕЙСТВИЕ — ОДНА КОМАНДА
 
 ```powershell
-pwsh -NoProfile -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS"
+powershell -NoProfile -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS"
 ```
 
 Pipeline автоматически:
@@ -24,13 +24,13 @@ Pipeline автоматически:
 
 ```powershell
 # Принудительный режим
-pwsh -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS" -Mode research
-pwsh -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS" -Mode code
-pwsh -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS" -Mode review
+powershell -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS" -Mode research
+powershell -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS" -Mode code
+powershell -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS" -Mode review
 
 # С файлом контекста
-pwsh -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS" -ContextFile ".\src\main.py"
+powershell -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS" -ContextFile ".\src\main.py"
 
 # Без ревью (быстрее)
-pwsh -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS" -SkipReview
+powershell -File scripts\Invoke-Pipeline.ps1 -Task "$ARGUMENTS" -SkipReview
 ```

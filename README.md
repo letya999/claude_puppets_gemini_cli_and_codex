@@ -18,10 +18,10 @@ Clone once into `~/.claude` — works in every project automatically:
 git clone https://github.com/your-org/claude-dispatcher $env:USERPROFILE\.claude
 
 # 3. Run one-time setup (generates settings.json with absolute paths)
-pwsh $env:USERPROFILE\.claude\Install.ps1
+powershell $env:USERPROFILE\.claude\Install.ps1
 
 # 4. (Optional) Add scripts to PATH for shorter syntax
-pwsh $env:USERPROFILE\.claude\Install.ps1 -AddToPath
+powershell $env:USERPROFILE\.claude\Install.ps1 -AddToPath
 ```
 
 That's it. Now `claude` in any project folder will automatically use the dispatcher.
@@ -94,7 +94,7 @@ winget install charmbracelet.mods
 
 ```powershell
 # One-time setup (interactive, with optional persistence)
-pwsh $env:USERPROFILE\.claude\scripts\Set-DispatcherEnv.ps1 -Persist
+powershell $env:USERPROFILE\.claude\scripts\Set-DispatcherEnv.ps1 -Persist
 
 # Or set manually for current session
 $env:GEMINI_API_KEY = "AIza..."
@@ -104,7 +104,7 @@ $env:OPENAI_API_KEY = "sk-..."
 ### Verify Installation
 
 ```powershell
-pwsh $env:USERPROFILE\.claude\scripts\Test-Tools.ps1
+powershell $env:USERPROFILE\.claude\scripts\Test-Tools.ps1
 ```
 
 ---
@@ -114,7 +114,7 @@ pwsh $env:USERPROFILE\.claude\scripts\Test-Tools.ps1
 ### Run the full chain (from any project)
 
 ```powershell
-pwsh "$env:USERPROFILE\.claude\scripts\Invoke-Chain.ps1" -Task "Create a FastAPI endpoint for user registration"
+powershell "$env:USERPROFILE\.claude\scripts\Invoke-Chain.ps1" -Task "Create a FastAPI endpoint for user registration"
 ```
 
 ### Manual step-by-step
@@ -123,13 +123,13 @@ pwsh "$env:USERPROFILE\.claude\scripts\Invoke-Chain.ps1" -Task "Create a FastAPI
 $scripts = "$env:USERPROFILE\.claude\scripts"
 
 # Research
-pwsh "$scripts\Run-Agent.ps1" -Model gemini-2.5-pro -Role researcher -Prompt "best practices for rate limiting"
+powershell "$scripts\Run-Agent.ps1" -Model gemini-2.5-pro -Role researcher -Prompt "best practices for rate limiting"
 
 # Implement
-pwsh "$scripts\Run-Agent.ps1" -Model gpt-5.3-codex -Role implementer -Yolo -Prompt "implement rate limiting"
+powershell "$scripts\Run-Agent.ps1" -Model gpt-5.3-codex -Role implementer -Yolo -Prompt "implement rate limiting"
 
 # Review
-pwsh "$scripts\Run-Agent.ps1" -Model gemini-2.5-pro -Role reviewer -Prompt "review the implementation"
+powershell "$scripts\Run-Agent.ps1" -Model gemini-2.5-pro -Role reviewer -Prompt "review the implementation"
 ```
 
 ### Claude Code slash commands (in chat)
@@ -190,7 +190,7 @@ npm install -g @google/generative-ai-cli
 # "API key not set"
 $env:GEMINI_API_KEY = "AIza..."
 # OR:
-pwsh $env:USERPROFILE\.claude\scripts\Set-DispatcherEnv.ps1 -Persist
+powershell $env:USERPROFILE\.claude\scripts\Set-DispatcherEnv.ps1 -Persist
 
 # "Access denied running .ps1"
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
@@ -206,3 +206,4 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 4. **Windows-native** — `$env:TEMP` not `/tmp/`, no bash/WSL2
 5. **Graceful degradation** — if a tool fails, fallback defined in config
 6. **Auditability** — every step's input/output saved to timestamped session directory
+

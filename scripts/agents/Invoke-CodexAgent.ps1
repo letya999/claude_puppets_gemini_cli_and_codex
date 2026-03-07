@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Codex sub-agent — runs Codex CLI for a specific role in the chain.
@@ -57,7 +57,7 @@ if (-not $Language) {
         'python|fastapi|django|flask|pandas|pydantic' { 'python'; break }
         'typescript|react|nextjs|angular|nest'        { 'typescript'; break }
         'javascript|nodejs|express|vue'               { 'javascript'; break }
-        'powershell|ps1|pwsh'                         { 'powershell'; break }
+        'powershell|ps1|powershell'                         { 'powershell'; break }
         'go |golang'                                  { 'go'; break }
         'rust|cargo'                                  { 'rust'; break }
         'csharp|dotnet|asp\.net'                      { 'csharp'; break }

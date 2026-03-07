@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Verifies availability of all required CLI tools in PATH.
@@ -28,7 +28,7 @@ $checks = @(
 )
 
 Write-Host ""
-Write-Host "=== Claude Dispatcher — Tool Availability Check ===" -ForegroundColor Cyan
+Write-Host "=== Claude Dispatcher - Tool Availability Check ===" -ForegroundColor Cyan
 Write-Host ""
 
 foreach ($check in $checks) {

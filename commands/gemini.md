@@ -1,4 +1,4 @@
-Пользователь явно вызвал `/gemini`. Делегируй задачу Gemini CLI.
+﻿Пользователь явно вызвал `/gemini`. Делегируй задачу Gemini CLI.
 
 Задача: $ARGUMENTS
 
@@ -7,7 +7,7 @@
 Немедленно выполни через Bash:
 
 ```powershell
-pwsh -NoProfile -File scripts\Invoke-GeminiDelegate.ps1 -Task "$ARGUMENTS"
+powershell -NoProfile -File scripts\Invoke-GeminiDelegate.ps1 -Task "$ARGUMENTS"
 ```
 
 Затем:
@@ -27,5 +27,5 @@ pwsh -NoProfile -File scripts\Invoke-GeminiDelegate.ps1 -Task "$ARGUMENTS"
 
 Если Gemini недоступен (нет в PATH или нет API ключа):
 ```powershell
-pwsh -NoProfile -File scripts\Invoke-CodexDelegate.ps1 -Task "$ARGUMENTS"
+powershell -NoProfile -File scripts\Invoke-CodexDelegate.ps1 -Task "$ARGUMENTS"
 ```

@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Install Claude Dispatcher globally — one-time setup.
@@ -7,7 +7,7 @@
     Run this once after cloning the repo into ~/.claude/:
 
         git clone <repo-url> $env:USERPROFILE\.claude
-        pwsh $env:USERPROFILE\.claude\Install.ps1
+        powershell $env:USERPROFILE\.claude\Install.ps1
 
     After that, the dispatcher is active in every project automatically.
 .PARAMETER ClaudeDir
@@ -53,7 +53,7 @@ if ($scriptClaudeDir -ne $ClaudeDir) {
     Write-Host ""
     Write-Host "  Typical install steps:" -ForegroundColor DarkGray
     Write-Host "    git clone <repo> `"$ClaudeDir`"" -ForegroundColor DarkGray
-    Write-Host "    pwsh `"$ClaudeDir\Install.ps1`"" -ForegroundColor DarkGray
+    Write-Host "    powershell `"$ClaudeDir\Install.ps1`"" -ForegroundColor DarkGray
     Write-Host ""
     $answer = Read-Host "Continue anyway? (y/N)"
     if ($answer -notmatch '^[Yy]') { exit 1 }
@@ -107,7 +107,7 @@ $settingsContent = @"
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"$onPromptJson\""
+            "command": "powershell -NoProfile -NonInteractive -File \"$onPromptJson\""
           }
         ]
       }
@@ -118,7 +118,7 @@ $settingsContent = @"
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"$preBashJson\""
+            "command": "powershell -NoProfile -NonInteractive -File \"$preBashJson\""
           }
         ]
       }
@@ -126,7 +126,7 @@ $settingsContent = @"
   },
   "permissions": {
     "allow": [
-      "Bash(pwsh*)",
+      "Bash(powershell*)",
       "Bash(powershell*)",
       "Bash(gemini*)",
       "Bash(codex*)",
@@ -172,7 +172,8 @@ Write-Host "    claude   (hooks activate automatically)" -ForegroundColor White
 if ($AddToPath) {
     Write-Host "    Invoke-Chain -Task `"your task`"  (after terminal restart)" -ForegroundColor White
 } else {
-    Write-Host "    pwsh `"$scriptsDir\Invoke-Chain.ps1`" -Task `"your task`"" -ForegroundColor White
+    Write-Host "    powershell `"$scriptsDir\Invoke-Chain.ps1`" -Task `"your task`"" -ForegroundColor White
     Write-Host "    (run with -AddToPath to add scripts to PATH for shorter syntax)" -ForegroundColor DarkGray
 }
 Write-Host ""
+

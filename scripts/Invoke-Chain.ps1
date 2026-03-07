@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Role-aware chain executor — reads config and runs agent steps in sequence.
@@ -130,13 +130,20 @@ for ($i = 0; $i -lt $chainSteps.Count; $i++) {
     $stepNum = $i + 1
     $agent   = $step.agent
     $role    = $step.role
-    $desc    = if ($step.description) { $step.description } else { "$agent performing $role" }
+    $desc = "Default desc"
+    if ($step -and (Get-Member -InputObject $step -Name "description" -MemberType Properties)) {
+        if ($step.description) {
+            $desc = $step.description
+        }
+    } else {
+        $desc = "$agent performing $role"
+    }
 
     $safeName       = $role -replace '[^a-zA-Z0-9\-]', '-'
     $stepOutputFile = Join-Path $sessionDir "step-${stepNum}-${agent}-${safeName}.txt"
 
     Banner "STEP $stepNum / $($chainSteps.Count)  |  [$($agent.ToUpper())]  $role" 'Yellow'
-    Log "Step $stepNum: $agent -> $role  ($desc)"
+    Log "Step $($stepNum): $agent -> $role  ($desc)"
 
     # Resolve per-agent config
     $stepConfig = @{}
@@ -145,15 +152,17 @@ for ($i = 0; $i -lt $chainSteps.Count; $i++) {
         $agentCfgObj.PSObject.Properties | ForEach-Object { $stepConfig[$_.Name] = $_.Value }
     }
     # Step-level inline config overrides agent-level config
-    if ($step.config) {
-        $step.config.PSObject.Properties | ForEach-Object { $stepConfig[$_.Name] = $_.Value }
+    if ($step -and (Get-Member -InputObject $step -Name "config" -MemberType Properties)) {
+        if ($step.config) {
+            $step.config.PSObject.Properties | ForEach-Object { $stepConfig[$_.Name] = $_.Value }
+        }
     }
 
     if ($DryRun) {
         Log "  [DRY RUN] Agent=$agent Role=$role Config=$($stepConfig | ConvertTo-Json -Compress)" 'DarkCyan'
-        $dryOut = "[DRY RUN] Placeholder output for step $stepNum ($agent:$role)"
+        $dryOut = "[DRY RUN] Placeholder output for step $stepNum ($($agent):$role)"
         $dryOut | Out-File $stepOutputFile -Encoding UTF8
-        $accumulatedContext += "`n--- Step $stepNum ($agent:$role) [DRY RUN] ---`n$dryOut`n"
+        $accumulatedContext += "`n--- Step $stepNum ($($agent):$role) [DRY RUN] ---`n$dryOut`n"
         $lastOutputFile = $stepOutputFile
         $stepResults.Add(@{ step=$stepNum; agent=$agent; role=$role; success=$true; dryRun=$true })
         continue
@@ -175,15 +184,20 @@ for ($i = 0; $i -lt $chainSteps.Count; $i++) {
 
         $lastOutputFile = $result.OutputFile
         $stepOutput = Get-Content $lastOutputFile -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
-        $accumulatedContext += "`n=== Step $stepNum: $agent -> $role ===`n$stepOutput`n"
+        $accumulatedContext += "`n=== Step $($stepNum): $agent -> $role ===`n$stepOutput`n"
         $stepSuccess = $true
         Log "Step $stepNum done: $lastOutputFile" 'Green'
 
     } catch {
-        Log "Step $stepNum FAILED ($agent:$role): $_" 'Red'
+        Log "Step $stepNum FAILED ($($agent):$role): $_" 'Red'
 
         # Try fallback if defined in chain step
-        if ($step.fallback) {
+        $hasFallback = $false
+        if ($step -and (Get-Member -InputObject $step -Name "fallback" -MemberType Properties)) {
+            if ($step.fallback) { $hasFallback = $true }
+        }
+        
+        if ($hasFallback) {
             $fbAgent = $step.fallback.agent
             $fbRole  = $step.fallback.role
             Log "  Fallback: $fbAgent -> $fbRole" 'Yellow'
@@ -200,7 +214,7 @@ for ($i = 0; $i -lt $chainSteps.Count; $i++) {
 
                 $lastOutputFile = $result.OutputFile
                 $stepOutput = Get-Content $lastOutputFile -Raw -Encoding UTF8
-                $accumulatedContext += "`n=== Step $stepNum FALLBACK ($fbAgent:$fbRole) ===`n$stepOutput`n"
+                $accumulatedContext += "`n=== Step $stepNum FALLBACK ($($fbAgent):$fbRole) ===`n$stepOutput`n"
                 $stepSuccess = $true
                 Log "  Fallback OK: $lastOutputFile" 'Green'
             } catch {
@@ -217,7 +231,12 @@ for ($i = 0; $i -lt $chainSteps.Count; $i++) {
         success    = $stepSuccess
     })
 
-    if (-not $stepSuccess -and -not $step.optional) {
+    $isOptional = $false
+    if ($step -and (Get-Member -InputObject $step -Name "optional" -MemberType Properties)) {
+        if ($step.optional) { $isOptional = $true }
+    }
+
+    if (-not $stepSuccess -and -not $isOptional) {
         Log "Non-optional step failed — stopping chain" 'Red'
         break
     }
@@ -243,7 +262,7 @@ if ($lastOutputFile -and (Test-Path $lastOutputFile)) {
     Write-Host ""
     Write-Host "--- OUTPUT START (Claude: read and apply via Edit tool) ---" -ForegroundColor DarkCyan
 
-    $lines = Get-Content $lastOutputFile -Encoding UTF8
+    $lines = @(Get-Content $lastOutputFile -Encoding UTF8)
     $lines | Select-Object -First 200 | ForEach-Object { Write-Host $_ }
     if ($lines.Count -gt 200) {
         Write-Host "  ... [+$($lines.Count - 200) lines — full: $lastOutputFile]" -ForegroundColor DarkGray
@@ -257,7 +276,7 @@ Write-Host "  Session: $sessionDir" -ForegroundColor DarkGray
 Write-Host "  Log:     $logFile" -ForegroundColor DarkGray
 Write-Host ""
 
-$allOk = ($stepResults | Where-Object { -not $_.success }).Count -eq 0
+$allOk = @($stepResults | Where-Object { -not $_.success }).Count -eq 0
 return @{
     Success     = $allOk
     Chain       = $chainSummary

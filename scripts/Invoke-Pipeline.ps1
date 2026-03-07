@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     One-click pipeline: Plan (Claude) -> Implement (Gemini/Codex) -> Review (Mods) -> Apply (Claude Edit)

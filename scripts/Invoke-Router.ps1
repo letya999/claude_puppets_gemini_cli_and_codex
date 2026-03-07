@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Central auto-router — single entry point for all dispatcher tasks.
@@ -25,16 +25,16 @@
     Show routing decision without executing.
 .EXAMPLE
     # From Claude Code Bash tool:
-    pwsh -File scripts\Invoke-Router.ps1 -Task "Implement JWT auth for FastAPI"
+    powershell -File scripts\Invoke-Router.ps1 -Task "Implement JWT auth for FastAPI"
 
     # Force tool:
-    pwsh -File scripts\Invoke-Router.ps1 -Task "Analyze logs" -Force gemini
+    powershell -File scripts\Invoke-Router.ps1 -Task "Analyze logs" -Force gemini
 
     # With context file:
-    pwsh -File scripts\Invoke-Router.ps1 -Task "Refactor this" -ContextFile ".\src\auth.py"
+    powershell -File scripts\Invoke-Router.ps1 -Task "Refactor this" -ContextFile ".\src\auth.py"
 
     # Dry run (see routing without executing):
-    pwsh -File scripts\Invoke-Router.ps1 -Task "Write a parser" -DryRun
+    powershell -File scripts\Invoke-Router.ps1 -Task "Write a parser" -DryRun
 #>
 [CmdletBinding()]
 param(
@@ -149,7 +149,7 @@ if (-not $Language) {
         'python|fastapi|django|flask|pandas'      { 'python'; break }
         'typescript|react|next\.?js|angular'      { 'typescript'; break }
         'javascript|node|express|vue'             { 'javascript'; break }
-        'powershell|ps1|pwsh'                     { 'powershell'; break }
+        'powershell|ps1|powershell'                     { 'powershell'; break }
         'go|golang'                               { 'go'; break }
         'rust|cargo'                              { 'rust'; break }
         'c#|csharp|dotnet|\.net|asp\.net'        { 'csharp'; break }

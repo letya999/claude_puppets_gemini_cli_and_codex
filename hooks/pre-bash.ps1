@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     PreToolUse hook for Bash — warns when Claude tries to implement code directly.
@@ -54,7 +54,7 @@ if ($isDirect) {
     $warning = @"
 [DISPATCHER WARNING] Claude is writing code directly instead of delegating.
 Per CLAUDE.md rules: implementation should go through the chain.
-Suggested: pwsh -NoProfile -File "$invokeChain" -Task "..."
+Suggested: powershell -NoProfile -File "$invokeChain" -Task "..."
 Proceeding anyway (set exit 2 in pre-bash.ps1 to enforce strict mode).
 "@
     Write-Output $warning

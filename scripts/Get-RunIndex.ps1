@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Inspect and manage run history. Equivalent of orchestrate's run-index.sh.

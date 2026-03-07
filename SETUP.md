@@ -15,7 +15,7 @@
         │
         ▼
 [Claude вызывает Bash tool]  ← Claude запускает subprocess из СВОЕГО же терминала
-        │  pwsh -File scripts\Invoke-Chain.ps1 -Task "..."
+        │  powershell -File scripts\Invoke-Chain.ps1 -Task "..."
         ▼
 [ХOOK: PreToolUse / Bash]  ← pre-bash.ps1 проверяет что запускается перед выполнением
         │
@@ -64,7 +64,7 @@ $env:GEMINI_API_KEY = "AIza..."
 [System.Environment]::SetEnvironmentVariable("GEMINI_API_KEY", "AIza...", "User")
 
 # Или через скрипт:
-pwsh -File scripts\Set-DispatcherEnv.ps1 -Persist
+powershell -File scripts\Set-DispatcherEnv.ps1 -Persist
 ```
 
 ### Шаг 3 — Настрой цепочку в конфиге
@@ -107,11 +107,11 @@ pwsh -File scripts\Set-DispatcherEnv.ps1 -Persist
 ```json
 {
   "hooks": {
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "pwsh -NoProfile -NonInteractive -File .claude/hooks/on-prompt.ps1" }] }],
-    "PreToolUse":       [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "pwsh -NoProfile -NonInteractive -File .claude/hooks/pre-bash.ps1" }] }]
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "powershell -NoProfile -NonInteractive -File .claude/hooks/on-prompt.ps1" }] }],
+    "PreToolUse":       [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "powershell -NoProfile -NonInteractive -File .claude/hooks/pre-bash.ps1" }] }]
   },
   "permissions": {
-    "allow": ["Bash(pwsh*)", "Bash(gemini*)", "Bash(codex*)", "Bash(mods*)"]
+    "allow": ["Bash(powershell*)", "Bash(gemini*)", "Bash(codex*)", "Bash(mods*)"]
   }
 }
 ```
@@ -122,13 +122,13 @@ pwsh -File scripts\Set-DispatcherEnv.ps1 -Persist
 
 ```powershell
 # Полная диагностика (без API вызовов):
-pwsh -File scripts\Test-Chain.ps1
+powershell -File scripts\Test-Chain.ps1
 
 # Dry-run цепочки (без API вызовов):
-pwsh -File scripts\Invoke-Chain.ps1 -Task "напиши функцию hello world" -DryRun
+powershell -File scripts\Invoke-Chain.ps1 -Task "напиши функцию hello world" -DryRun
 
 # Реальный тест:
-pwsh -File scripts\Invoke-Chain.ps1 -Task "напиши функцию для валидации email на Python"
+powershell -File scripts\Invoke-Chain.ps1 -Task "напиши функцию для валидации email на Python"
 ```
 
 ### Шаг 6 — Запусти Claude Code и дай задачу
@@ -153,7 +153,7 @@ claude  # запускаешь из папки проекта (где лежит
     │ Active chain: gemini:researcher -> gemini:implementer       │
     │                                                             │
     │ STEP 1 - Write PLAN                                         │
-    │ STEP 2 - Run: pwsh -File scripts\Invoke-Chain.ps1 -Task ... │
+    │ STEP 2 - Run: powershell -File scripts\Invoke-Chain.ps1 -Task ... │
     └─────────────────────────────────────────────────────────────┘
 
 Claude пишет:
@@ -165,7 +165,7 @@ Claude пишет:
   2. Gemini реализует endpoint → implementer
 
   [Claude вызывает Bash tool]:
-  pwsh -NoProfile -File scripts\Invoke-Chain.ps1 -Task "напиши FastAPI endpoint..."
+  powershell -NoProfile -File scripts\Invoke-Chain.ps1 -Task "напиши FastAPI endpoint..."
 
   [Invoke-Chain.ps1 запускает Gemini]:
   $prompt | gemini --model gemini-2.5-pro
@@ -215,8 +215,8 @@ Get-Content $env:TEMP\gemini-out.txt
 | Подход | Когда | Команда |
 |--------|-------|---------|
 | **Автоматическая цепочка** (текущая система) | Стандартные задачи, конфигурируется в json | Хуки делают это сами |
-| **Ручной запуск цепочки** | Один конкретный шаг | `pwsh -File scripts\Invoke-Chain.ps1 -Task "..."` |
-| **Прямой вызов агента** | Только Gemini или только Codex | `pwsh -File scripts\agents\Invoke-GeminiAgent.ps1 ...` |
+| **Ручной запуск цепочки** | Один конкретный шаг | `powershell -File scripts\Invoke-Chain.ps1 -Task "..."` |
+| **Прямой вызов агента** | Только Gemini или только Codex | `powershell -File scripts\agents\Invoke-GeminiAgent.ps1 ...` |
 | **Прямой Bash вызов** | Без скриптов, минималистично | `$prompt \| gemini` в Bash tool |
 
 ---
@@ -291,5 +291,6 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 Get-ChildItem $env:TEMP\chain-* | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Get-ChildItem
 
 # Полная диагностика:
-pwsh -File scripts\Test-Chain.ps1
+powershell -File scripts\Test-Chain.ps1
 ```
+
