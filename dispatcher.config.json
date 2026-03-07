@@ -4,7 +4,8 @@
     {
       "agent": "gemini",
       "model": "gemini-2.5-pro",
-      "role": "implementer"
+      "role": "implementer",
+      "yolo": true
     }
   ],
   "_presets": {
@@ -64,7 +65,8 @@
       {
         "agent": "gemini",
         "model": "gemini-2.5-pro",
-        "role": "implementer"
+        "role": "implementer",
+        "yolo": true
       }
     ],
     "codex_plus_review": [
@@ -91,7 +93,8 @@
       {
         "agent": "gemini",
         "model": "gemini-2.5-pro",
-        "role": "implementer"
+        "role": "implementer",
+        "yolo": true
       }
     ]
   },

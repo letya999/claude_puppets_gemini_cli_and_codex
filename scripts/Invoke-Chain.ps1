@@ -41,22 +41,30 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$scriptDir  = $PSScriptRoot
+$scriptDir = $PSScriptRoot
 $profileDir = Split-Path $scriptDir -Parent
-$rolesDir   = Join-Path $profileDir "roles"
-$agentsDir  = Join-Path $scriptDir "agents"
+
+if ($profileDir -match '\.claude$') {
+    $rolesDir = Join-Path $profileDir "roles"
+}
+else {
+    $rolesDir = Join-Path $profileDir ".claude\roles"
+}
+$agentsDir = Join-Path $scriptDir "agents"
 
 # ════════════════════════════════════════════════════════════════
 # LOAD CONFIG  (local project overrides global profile)
 # ════════════════════════════════════════════════════════════════
 if (-not $ConfigPath) {
-    $localConfig  = Join-Path $PWD ".claude\dispatcher.config.json"
+    $localConfig = Join-Path $PWD ".claude\dispatcher.config.json"
     $globalConfig = Join-Path $profileDir "dispatcher.config.json"
     if (Test-Path $localConfig) {
         $ConfigPath = $localConfig
-    } elseif (Test-Path $globalConfig) {
+    }
+    elseif (Test-Path $globalConfig) {
         $ConfigPath = $globalConfig
-    } else {
+    }
+    else {
         throw "dispatcher.config.json not found (checked: $localConfig, $globalConfig)"
     }
 }
@@ -68,7 +76,8 @@ if (-not (Test-Path $ConfigPath)) {
 $rawConfig = Get-Content $ConfigPath -Raw -Encoding UTF8
 try {
     $config = $rawConfig | ConvertFrom-Json
-} catch {
+}
+catch {
     throw "Invalid JSON in ${ConfigPath}: $_"
 }
 
@@ -80,10 +89,10 @@ if (-not $chainSteps -or $chainSteps.Count -eq 0) {
 # ════════════════════════════════════════════════════════════════
 # SESSION SETUP
 # ════════════════════════════════════════════════════════════════
-$timestamp  = Get-Date -Format 'yyyyMMdd-HHmmss'
+$timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $sessionDir = Join-Path $env:TEMP "chain-$timestamp"
 New-Item -ItemType Directory -Path $sessionDir -Force | Out-Null
-$logFile    = Join-Path $sessionDir "chain.log"
+$logFile = Join-Path $sessionDir "chain.log"
 
 function Log ([string]$msg, [string]$color = 'White') {
     $entry = "[$(Get-Date -Format 'HH:mm:ss')] $msg"
@@ -111,35 +120,36 @@ Log "Session: $sessionDir"
 if ($DryRun) { Log "DRY RUN — no API calls" 'Yellow' }
 
 @{
-    task      = $Task
-    chain     = $chainSteps
-    startedAt = (Get-Date -Format 'o')
-    sessionDir= $sessionDir
-    dryRun    = $DryRun.IsPresent
+    task       = $Task
+    chain      = $chainSteps
+    startedAt  = (Get-Date -Format 'o')
+    sessionDir = $sessionDir
+    dryRun     = $DryRun.IsPresent
 } | ConvertTo-Json -Depth 5 | Out-File (Join-Path $sessionDir "manifest.json") -Encoding UTF8
 
 # ════════════════════════════════════════════════════════════════
 # EXECUTE CHAIN
 # ════════════════════════════════════════════════════════════════
 $accumulatedContext = ""
-$lastOutputFile     = ""
-$stepResults        = [System.Collections.Generic.List[hashtable]]::new()
+$lastOutputFile = ""
+$stepResults = [System.Collections.Generic.List[hashtable]]::new()
 
 for ($i = 0; $i -lt $chainSteps.Count; $i++) {
-    $step    = $chainSteps[$i]
+    $step = $chainSteps[$i]
     $stepNum = $i + 1
-    $agent   = $step.agent
-    $role    = $step.role
+    $agent = $step.agent
+    $role = $step.role
     $desc = "Default desc"
     if ($step -and (Get-Member -InputObject $step -Name "description" -MemberType Properties)) {
         if ($step.description) {
             $desc = $step.description
         }
-    } else {
+    }
+    else {
         $desc = "$agent performing $role"
     }
 
-    $safeName       = $role -replace '[^a-zA-Z0-9\-]', '-'
+    $safeName = $role -replace '[^a-zA-Z0-9\-]', '-'
     $stepOutputFile = Join-Path $sessionDir "step-${stepNum}-${agent}-${safeName}.txt"
 
     Banner "STEP $stepNum / $($chainSteps.Count)  |  [$($agent.ToUpper())]  $role" 'Yellow'
@@ -164,7 +174,7 @@ for ($i = 0; $i -lt $chainSteps.Count; $i++) {
         $dryOut | Out-File $stepOutputFile -Encoding UTF8
         $accumulatedContext += "`n--- Step $stepNum ($($agent):$role) [DRY RUN] ---`n$dryOut`n"
         $lastOutputFile = $stepOutputFile
-        $stepResults.Add(@{ step=$stepNum; agent=$agent; role=$role; success=$true; dryRun=$true })
+        $stepResults.Add(@{ step = $stepNum; agent = $agent; role = $role; success = $true; dryRun = $true })
         continue
     }
 
@@ -188,7 +198,8 @@ for ($i = 0; $i -lt $chainSteps.Count; $i++) {
         $stepSuccess = $true
         Log "Step $stepNum done: $lastOutputFile" 'Green'
 
-    } catch {
+    }
+    catch {
         Log "Step $stepNum FAILED ($($agent):$role): $_" 'Red'
 
         # Try fallback if defined in chain step
@@ -199,7 +210,7 @@ for ($i = 0; $i -lt $chainSteps.Count; $i++) {
         
         if ($hasFallback) {
             $fbAgent = $step.fallback.agent
-            $fbRole  = $step.fallback.role
+            $fbRole = $step.fallback.role
             Log "  Fallback: $fbAgent -> $fbRole" 'Yellow'
             try {
                 $result = & "$scriptDir\Invoke-Agent.ps1" `
@@ -217,19 +228,20 @@ for ($i = 0; $i -lt $chainSteps.Count; $i++) {
                 $accumulatedContext += "`n=== Step $stepNum FALLBACK ($($fbAgent):$fbRole) ===`n$stepOutput`n"
                 $stepSuccess = $true
                 Log "  Fallback OK: $lastOutputFile" 'Green'
-            } catch {
+            }
+            catch {
                 Log "  Fallback failed: $_" 'Red'
             }
         }
     }
 
     $stepResults.Add(@{
-        step       = $stepNum
-        agent      = $agent
-        role       = $role
-        outputFile = $lastOutputFile
-        success    = $stepSuccess
-    })
+            step       = $stepNum
+            agent      = $agent
+            role       = $role
+            outputFile = $lastOutputFile
+            success    = $stepSuccess
+        })
 
     $isOptional = $false
     if ($step -and (Get-Member -InputObject $step -Name "optional" -MemberType Properties)) {
@@ -249,7 +261,7 @@ Banner "CHAIN COMPLETE" 'Green'
 
 Write-Host "  Results:" -ForegroundColor Cyan
 foreach ($r in $stepResults) {
-    $icon  = if ($r.success) { "[OK]  " } else { "[FAIL]" }
+    $icon = if ($r.success) { "[OK]  " } else { "[FAIL]" }
     $color = if ($r.success) { 'Green' } else { 'Red' }
     Write-Host ("  $icon  Step {0}: {1} -> {2}" -f $r.step, $r.agent, $r.role) -ForegroundColor $color
 }

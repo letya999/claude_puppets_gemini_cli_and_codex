@@ -73,11 +73,18 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$scriptDir   = $PSScriptRoot
+$scriptDir = $PSScriptRoot
 $projectRoot = Split-Path $scriptDir -Parent
 
-if (-not $RolesDir) { $RolesDir = Join-Path $projectRoot ".claude\roles" }
-if (-not $WorkDir)  { $WorkDir  = (Get-Location).Path }
+if (-not $RolesDir) { 
+    if ($projectRoot -match '\.claude$') {
+        $RolesDir = Join-Path $projectRoot "roles"
+    }
+    else {
+        $RolesDir = Join-Path $projectRoot ".claude\roles"
+    }
+}
+if (-not $WorkDir) { $WorkDir = (Get-Location).Path }
 
 # ════════════════════════════════════════════════════════════════
 # MODEL ROUTING
@@ -87,9 +94,9 @@ function Route-Model([string]$model) {
     $m = $model.ToLower()
     switch -Regex ($m) {
         '^claude-|^opus|^sonnet|^haiku' { return 'claude' }
-        '^gemini'                        { return 'gemini' }
-        '^codex|^gpt-|^o1|^o3|^o4'     { return 'codex'  }
-        '^mods'                          { return 'mods'   }
+        '^gemini' { return 'gemini' }
+        '^codex|^gpt-|^o1|^o3|^o4' { return 'codex' }
+        '^mods' { return 'mods' }
         default { throw "Unknown model family: $model. Supported prefixes: claude-, gemini-, codex/gpt-/o*, mods" }
     }
 }
@@ -102,20 +109,20 @@ Write-Host "  [Run-Agent] Model: $Model  Harness: $harness  Yolo: $($Yolo.IsPres
 # ════════════════════════════════════════════════════════════════
 
 $timestamp = Get-Date -Format 'yyyyMMddTHHmmssZ'
-$pid_hex   = '{0:x4}' -f $PID
-$runId     = "${timestamp}__${pid_hex}"
+$pid_hex = '{0:x4}' -f $PID
+$runId = "${timestamp}__${pid_hex}"
 $sessionId = if ($Session) { $Session } else { $runId }
 
 $orchestrateRoot = Join-Path $projectRoot ".orchestrate"
-$runsDir         = Join-Path $orchestrateRoot "runs\agent-runs"
-$indexDir        = Join-Path $orchestrateRoot "index"
-$indexFile       = Join-Path $indexDir "runs.jsonl"
-$logDir          = if ($OutputDir) { $OutputDir } else { Join-Path $runsDir $runId }
+$runsDir = Join-Path $orchestrateRoot "runs\agent-runs"
+$indexDir = Join-Path $orchestrateRoot "index"
+$indexFile = Join-Path $indexDir "runs.jsonl"
+$logDir = if ($OutputDir) { $OutputDir } else { Join-Path $runsDir $runId }
 
 New-Item -ItemType Directory -Force -Path $logDir  | Out-Null
 New-Item -ItemType Directory -Force -Path $indexDir | Out-Null
 
-$inputFile  = Join-Path $logDir "input.md"
+$inputFile = Join-Path $logDir "input.md"
 $outputFile = Join-Path $logDir "output.txt"
 $reportFile = Join-Path $logDir "report.md"
 $paramsFile = Join-Path $logDir "params.json"
@@ -130,7 +137,8 @@ if ($Role) {
     if (Test-Path $rolePath) {
         $rolePrompt = Get-Content $rolePath -Raw -Encoding UTF8
         Write-Host "  [Run-Agent] Role: $Role ($rolePath)" -ForegroundColor DarkGray
-    } else {
+    }
+    else {
         Write-Host "  [Run-Agent] WARN: Role '$Role' not found: $rolePath" -ForegroundColor Yellow
     }
 }
@@ -140,7 +148,8 @@ if (-not $Prompt -and -not [Console]::IsInputRedirected -eq $false) {
     try {
         $piped = [Console]::In.ReadToEnd()
         if ($piped.Trim()) { $Prompt = $piped }
-    } catch { }
+    }
+    catch { }
 }
 
 # ════════════════════════════════════════════════════════════════
@@ -155,9 +164,9 @@ $composed += $Prompt
 
 # Append report instruction (like orchestrate's build_report_instruction)
 $reportInstruction = switch ($Detail) {
-    'brief'    { "Keep the report concise: what was done, pass/fail, any blockers." }
+    'brief' { "Keep the report concise: what was done, pass/fail, any blockers." }
     'detailed' { "Be thorough: all decisions, all files touched, full verification results, recommendations." }
-    default    { "Include: what was done, key decisions, files created/modified, any issues." }
+    default { "Include: what was done, key decisions, files created/modified, any issues." }
 }
 $composed += @"
 
@@ -176,18 +185,19 @@ function Get-ClaudeCmd {
     $args_list = @('claude', '-p', '-', '--model', $Model, '--output-format', 'stream-json', '--verbose')
     if ($Agent) {
         $args_list += @('--agent', $Agent)
-    } elseif ($Yolo) {
+    }
+    elseif ($Yolo) {
         $args_list += '--dangerously-skip-permissions'
     }
     return $args_list
 }
 
 function Get-GeminiCmd {
-    # Gemini CLI: no sandbox, no YOLO needed — it's a text interface
-    # YOLO note: Gemini CLI has no tool execution, so no sandboxing applies
+    # Gemini CLI supports YOLO mode (--yolo) for unrestricted file/command access
     $args_list = @('gemini', '--model', $Model)
     if ($Yolo) {
-        Write-Host "  [Run-Agent] Gemini YOLO: Gemini CLI has no sandbox — already unrestricted" -ForegroundColor DarkGray
+        Write-Host "  [Run-Agent] Gemini YOLO: --yolo flag (UNSAFE file/command access)" -ForegroundColor Red
+        $args_list += "--yolo"
     }
     return $args_list
 }
@@ -198,7 +208,8 @@ function Get-CodexCmd {
     $perm = if ($Yolo) {
         Write-Host "  [Run-Agent] Codex YOLO: --dangerously-bypass-approvals-and-sandbox (UNSAFE)" -ForegroundColor Red
         '--dangerously-bypass-approvals-and-sandbox'
-    } else {
+    }
+    else {
         '--sandbox workspace-write'
     }
     return @('codex', 'exec', '-m', $Model, '--json', '-') + ($perm -split ' ')
@@ -211,8 +222,8 @@ function Get-ModsCmd {
 $cliArgs = switch ($harness) {
     'claude' { Get-ClaudeCmd }
     'gemini' { Get-GeminiCmd }
-    'codex'  { Get-CodexCmd  }
-    'mods'   { Get-ModsCmd   }
+    'codex' { Get-CodexCmd }
+    'mods' { Get-ModsCmd }
 }
 
 $cliDisplay = $cliArgs -join ' '
@@ -266,14 +277,14 @@ if ($DryRun) {
     "[DRY RUN] No execution" | Out-File $outputFile -Encoding UTF8
     "# Report (Dry Run)`n`nRun ID: $runId`nNo execution performed." | Out-File $reportFile -Encoding UTF8
 
-    return @{ Success=$true; RunId=$runId; LogDir=$logDir; DryRun=$true; Harness=$harness }
+    return @{ Success = $true; RunId = $runId; LogDir = $logDir; DryRun = $true; Harness = $harness }
 }
 
 # ════════════════════════════════════════════════════════════════
 # WRITE RUN INDEX (start row)
 # ════════════════════════════════════════════════════════════════
 
-$startRow = '{"run_id":"' + $runId + '","status":"running","created_at_utc":"' + (Get-Date -Format 'o') + '","session_id":"' + $sessionId + '","model":"' + $Model + '","harness":"' + $harness + '","role":"' + $Role + '","yolo":' + $Yolo.IsPresent.ToString().ToLower() + ',"log_dir":"' + ($logDir -replace '\\','\\\\') + '"}'
+$startRow = '{"run_id":"' + $runId + '","status":"running","created_at_utc":"' + (Get-Date -Format 'o') + '","session_id":"' + $sessionId + '","model":"' + $Model + '","harness":"' + $harness + '","role":"' + $Role + '","yolo":' + $Yolo.IsPresent.ToString().ToLower() + ',"log_dir":"' + ($logDir -replace '\\', '\\\\') + '"}'
 Add-Content -Path $indexFile -Value $startRow -Encoding UTF8
 
 $composed | Out-File $inputFile -Encoding UTF8
@@ -286,12 +297,12 @@ Write-Host "  [Run-Agent] Starting: $cliDisplay" -ForegroundColor Cyan
 $startTime = Get-Date
 
 $exitCode = 0
-$output   = ""
-$success  = $false
+$output = ""
+$success = $false
 
 try {
     $cli = $cliArgs[0]
-    $cliRest = if ($cliArgs.Count -gt 1) { $cliArgs[1..($cliArgs.Count-1)] } else { @() }
+    $cliRest = if ($cliArgs.Count -gt 1) { $cliArgs[1..($cliArgs.Count - 1)] } else { @() }
 
     if (-not (Get-Command $cli -ErrorAction SilentlyContinue)) {
         throw "$cli not found in PATH"
@@ -307,24 +318,29 @@ try {
         # triggers interactive mode and produces no output.
         if ($harness -eq 'gemini') {
             $output = & $cli @cliRest '-p' $composed 2>$errorFile
-        } else {
+        }
+        else {
             $output = $composed | & $cli @cliRest 2>$errorFile
         }
-    } finally {
+    }
+    finally {
         $ErrorActionPreference = $oldErrPref
     }
     $exitCode = $LASTEXITCODE
 
     if ($exitCode -eq 0 -and $output) {
         $success = $true
-    } elseif (-not $output) {
+    }
+    elseif (-not $output) {
         $errContent = Get-Content $errorFile -Raw -ErrorAction SilentlyContinue
         throw "No output from $cli (exit $exitCode). Stderr: $errContent"
-    } else {
+    }
+    else {
         $success = $true  # some tools use non-zero exit even on success
     }
 
-} catch {
+}
+catch {
     $exitCode = 1
     $errMsg = "$_"
     Write-Host "  [Run-Agent] FAILED: $errMsg" -ForegroundColor Red
@@ -332,7 +348,7 @@ try {
 }
 
 $duration = [int](((Get-Date) - $startTime).TotalSeconds)
-$status   = if ($success) { 'completed' } else { 'failed' }
+$status = if ($success) { 'completed' } else { 'failed' }
 
 # Save output
 $output | Out-File $outputFile -Encoding UTF8
@@ -342,7 +358,8 @@ if (-not (Test-Path $reportFile) -or (Get-Item $reportFile).Length -lt 10) {
     # Simple extraction: take everything after last markdown heading
     $reportContent = if ($output) {
         "# Report`n`n$($output | Select-Object -Last 100 | Out-String)"
-    } else {
+    }
+    else {
         "# Report`n`n**Status**: $status`n**Duration**: ${duration}s`n**Exit code**: $exitCode"
     }
     $reportContent | Out-File $reportFile -Encoding UTF8
@@ -352,7 +369,7 @@ if (-not (Test-Path $reportFile) -or (Get-Item $reportFile).Length -lt 10) {
 # WRITE RUN INDEX (finalize row)
 # ════════════════════════════════════════════════════════════════
 
-$finalRow = '{"run_id":"' + $runId + '","status":"' + $status + '","finished_at_utc":"' + (Get-Date -Format 'o') + '","duration_seconds":' + $duration + ',"exit_code":' + $exitCode + ',"report_path":"' + ($reportFile -replace '\\','\\\\') + '"}'
+$finalRow = '{"run_id":"' + $runId + '","status":"' + $status + '","finished_at_utc":"' + (Get-Date -Format 'o') + '","duration_seconds":' + $duration + ',"exit_code":' + $exitCode + ',"report_path":"' + ($reportFile -replace '\\', '\\\\') + '"}'
 Add-Content -Path $indexFile -Value $finalRow -Encoding UTF8
 
 Write-Host "  [Run-Agent] $status (${duration}s) → $logDir" -ForegroundColor $(if ($success) { 'Green' } else { 'Red' })

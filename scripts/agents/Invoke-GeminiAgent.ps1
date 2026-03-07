@@ -32,7 +32,8 @@ param(
     [Parameter(Mandatory)] [string]$OutputFile,
     [Parameter()]          [string]$Model = "gemini-2.5-pro",
     [Parameter()]          [int]$MaxRetries = 1,
-    [Parameter()]          [string]$RolesDir = ".claude\roles"
+    [Parameter()]          [string]$RolesDir = ".claude\roles",
+    [Parameter()]          [switch]$Yolo
 )
 
 Set-StrictMode -Version Latest
@@ -71,7 +72,8 @@ if ($Context.Trim()) {
     # Limit context to avoid token overflow — take last 80k chars
     $ctxTrimmed = if ($Context.Length -gt 80000) {
         "...[truncated]...`n" + $Context.Substring($Context.Length - 80000)
-    } else { $Context }
+    }
+    else { $Context }
 
     $prompt += @"
 
@@ -104,7 +106,7 @@ Write-Host "  [gemini:$Role] Running (model: $Model)..." -ForegroundColor Cyan
 # ── Execute with retry ─────────────────────────────────────────
 $attempt = 0
 $success = $false
-$output  = ""
+$output = ""
 
 while ($attempt -le $MaxRetries -and -not $success) {
     if ($attempt -gt 0) {
@@ -120,6 +122,9 @@ while ($attempt -le $MaxRetries -and -not $success) {
         if ($env:GEMINI_API_KEY) {
             $geminiArgs += "--api-key", "$env:GEMINI_API_KEY"
         }
+        if ($Yolo) {
+            $geminiArgs += "--yolo"
+        }
         $geminiArgs += "-p", $prompt
 
         # Temporarily disable Stop on error so stderr doesn't throw NativeCommandError in PS 5.1
@@ -127,17 +132,20 @@ while ($attempt -le $MaxRetries -and -not $success) {
         $ErrorActionPreference = 'Continue'
         try {
             $output = & gemini @geminiArgs 2>$errorFile
-        } finally {
+        }
+        finally {
             $ErrorActionPreference = $oldErrPref
         }
 
         if ($LASTEXITCODE -eq 0 -and $output) {
             $success = $true
-        } else {
+        }
+        else {
             $errContent = Get-Content $errorFile -Raw -ErrorAction SilentlyContinue
             throw "Gemini exit $LASTEXITCODE. Error: $errContent"
         }
-    } catch {
+    }
+    catch {
         Write-Host "  [WARN] Attempt $($attempt+1): $_" -ForegroundColor Yellow
     }
     $attempt++

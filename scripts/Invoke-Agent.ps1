@@ -85,6 +85,7 @@ $paramMap = @{
     language = 'Language'
     retries  = 'MaxRetries'
     timeout  = 'TimeoutSec'
+    yolo     = 'Yolo'
 }
 
 foreach ($key in $StepConfig.Keys) {
@@ -107,7 +108,8 @@ if ($ContextFile -and $Agent -eq 'mods') {
 try {
     $result = & $agentScript @agentParams
     return $result
-} catch {
+}
+catch {
     Write-Host "  [ERROR] Agent '$Agent' role '$Role' failed: $_" -ForegroundColor Red
     throw
 }
