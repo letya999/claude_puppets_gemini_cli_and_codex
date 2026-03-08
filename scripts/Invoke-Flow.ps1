@@ -79,8 +79,8 @@ foreach ($Step in $SelectedFlow.steps) {
     
     switch ($Tool) {
         "gemini" {
-            # Recommended: use positional prompt to avoid flag conflicts
-            $Args = @($FinalPrompt)
+            # Recommended: use -p/--prompt for non-interactive (headless) mode to avoid AttachConsole issues in Windows
+            $Args = @("-p", $FinalPrompt)
             if ($Model) { $Args += "--model"; $Args += $Model }
             if ($UseYolo) { $Args += "--yolo" }
             $Output = & gemini @Args

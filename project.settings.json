@@ -1,5 +1,5 @@
 {
-  "mode": "global",
+  "mode": "local",
   "activeFormat": "directives",
   "version": "2.0.0",
   "windowsVersion": "11",
