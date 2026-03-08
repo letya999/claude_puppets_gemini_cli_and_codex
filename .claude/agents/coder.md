@@ -1,7 +1,7 @@
 ---
 name: coder
 description: Implementation agent with full file system access. Use for writing code, scripts, configs. Runs with --yolo.
-model: gemini-2.0-flash
+model: gemini-2.5-flash
 tools: [read_file, write_file, replace, run_shell_command, glob, grep_search]
 ---
 

@@ -12,7 +12,7 @@
         {
           "name": "implement",
           "tool": "codex",
-          "model": "gpt-4-codex",
+          "model": "gemini-2.5-flash",
           "role": "implementer",
           "yolo": true
         }

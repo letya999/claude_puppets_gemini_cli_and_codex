@@ -12,17 +12,30 @@ $ErrorActionPreference = "Stop"
 # --- 1. Path Resolution ---
 $CurrentDir = Get-Location
 $GlobalBase = Join-Path $env:USERPROFILE ".claude"
-$LocalBase  = $CurrentDir
+$LocalClaudeDir = Join-Path $CurrentDir ".claude"
 
-# Prioritize local config, fallback to global
-$SettingsFile = if (Test-Path "$LocalBase\project.settings.json") { "$LocalBase\project.settings.json" } else { "$GlobalBase\project.settings.json" }
-if (-not (Test-Path $SettingsFile)) { throw "Dispatcher not installed. Run Install-Dispatcher.ps1 first." }
-$Settings = Get-Content $SettingsFile | ConvertFrom-Json
+# Prioritize local config (prefer .claude subdir if it exists, fallback to root)
+$SettingsFile = if (Test-Path "$LocalClaudeDir\project.settings.json") { "$LocalClaudeDir\project.settings.json" } 
+                elseif (Test-Path "$CurrentDir\project.settings.json") { "$CurrentDir\project.settings.json" }
+                else { "$GlobalBase\project.settings.json" }
 
-$FlowConfigFile = if ($Settings.mode -eq "local") { Join-Path $CurrentDir "flow.config.json" } else { Join-Path $GlobalBase "flow.config.json" }
-$FlowConfig = Get-Content $FlowConfigFile | ConvertFrom-Json
+if (-not (Test-Path $SettingsFile)) { throw "Dispatcher settings not found. Run Install-Dispatcher.ps1 or Switch-Mode.ps1." }
+$Settings = Get-Content $SettingsFile -Raw | ConvertFrom-Json
 
-$RolesDir = if ($Settings.mode -eq "local") { "$LocalBase\roles" } else { "$GlobalBase\roles" }
+$FlowConfigFile = if ($Settings.mode -eq "local") { 
+    if (Test-Path "$LocalClaudeDir\flow.config.json") { "$LocalClaudeDir\flow.config.json" } else { "$CurrentDir\flow.config.json" }
+} else { 
+    Join-Path $GlobalBase "flow.config.json" 
+}
+
+if (-not (Test-Path $FlowConfigFile)) { throw "Flow config not found at $FlowConfigFile." }
+$FlowConfig = Get-Content $FlowConfigFile -Raw | ConvertFrom-Json
+
+$RolesDir = if ($Settings.mode -eq "local") { 
+    if (Test-Path "$LocalClaudeDir\roles") { "$LocalClaudeDir\roles" } else { "$CurrentDir\roles" }
+} else { 
+    Join-Path $GlobalBase "roles" 
+}
 
 # Resolve Flow: Parameter > Config Default > Hardcoded fallback
 $TargetFlow = if ($Flow) { $Flow } elseif ($FlowConfig.defaultFlow) { $FlowConfig.defaultFlow } else { "standard" }
@@ -54,7 +67,11 @@ foreach ($Step in $SelectedFlow.steps) {
     Write-Host ">>> Step: $StepName | Tool: $Tool | Role: $Role" -ForegroundColor Yellow
 
     $RoleFile = Join-Path $RolesDir "$Role.md"
-    $SystemPrompt = if (Test-Path $RoleFile) { Get-Content $RoleFile -Raw } else { "" }
+    $SystemPrompt = if (Test-Path $RoleFile) { Get-Content $RoleFile -Raw } else { 
+        Write-Warning "Role file not found: $RoleFile. Using empty system prompt."
+        "" 
+    }
+    
     $CleanContext = Sanitize-Prompt -RawContent $Context
     $FinalPrompt = "$SystemPrompt`n`nCONTEXT:`n$CleanContext`n`nTASK:`n$Task"
 
@@ -66,13 +83,14 @@ foreach ($Step in $SelectedFlow.steps) {
         switch ($Tool) {
             "gemini" {
                 if (-not (Get-Command gemini -ErrorAction SilentlyContinue)) { throw "Gemini CLI not found." }
-                # Use --prompt flag and ensure it's treated as a single argument
-                $Args = @("--prompt", $FinalPrompt)
+                # Use -p flag to avoid pty/conpty issues on Windows
+                $Args = @("-p", $FinalPrompt)
                 if ($Model) { $Args += "--model"; $Args += $Model }
                 if ($UseYolo) { $Args += "--yolo" }
                 $Output = & gemini @Args
             }
             "claude" {
+                # For Claude CLI, -p is also used for prompt
                 $Args = @("-p", $FinalPrompt)
                 if ($UseYolo) { $Args += "--dangerously-skip-permissions" }
                 $Output = & claude @Args
@@ -81,11 +99,11 @@ foreach ($Step in $SelectedFlow.steps) {
                 # Fallback to gemini if codex missing
                 if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
                     Write-Warning "Codex missing, falling back to Gemini..."
-                    $Args = @("--prompt", $FinalPrompt)
+                    $Args = @("-p", $FinalPrompt)
                     if ($UseYolo) { $Args += "--yolo" }
                     $Output = & gemini @Args
                 } else {
-                    $Args = @("run", "--prompt", $FinalPrompt)
+                    $Args = @("run", "-p", $FinalPrompt) # Assuming codex also supports -p or similar.
                     if ($Model) { $Args += "--model"; $Args += $Model }
                     if ($UseYolo) { $Args += "--yolo" }
                     $Output = & codex @Args

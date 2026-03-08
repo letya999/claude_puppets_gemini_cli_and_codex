@@ -22,11 +22,11 @@
                                   "description":  "Автоматические хуки на ввод пользователя (только Global)"
                               },
                     "skills":  {
-                                   "enabled":  true,
+                                   "enabled":  false,
                                    "description":  "Интеграция кастомных JavaScript навыков"
                                },
                     "subagents":  {
-                                      "enabled":  false,
+                                      "enabled":  true,
                                       "description":  "Использование профилей агентов (researcher, coder и т.д.)"
                                   }
                 }

@@ -6,13 +6,13 @@
         {
           "name": "research",
           "tool": "gemini",
-          "model": "gemini-2.5-pro",
+          "model": "gemini-2.5-flash",
           "role": "researcher"
         },
         {
           "name": "implement",
           "tool": "codex",
-          "model": "gpt-4-codex",
+          "model": "gemini-2.5-flash",
           "role": "implementer",
           "yolo": true
         }
