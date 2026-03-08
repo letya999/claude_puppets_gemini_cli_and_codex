@@ -48,11 +48,30 @@ function Set-MarkdownBlock {
     $StartMarker = "<!-- DISPATCHER_MODE_START -->"
     $EndMarker = "<!-- DISPATCHER_MODE_END -->"
 
+    # Read planning config
+    $Settings = Get-Content (Join-Path $ProjectRoot "project.settings.json") -Raw | ConvertFrom-Json
+    $PlanDir = if ($Scope -eq "Global") { Join-Path $PWD "plans" } else { Join-Path $ProjectRoot "plans" }
+    
+    $PlanningBlock = ""
+    if ($Settings.planning.enabled) {
+        if (-not (Test-Path $PlanDir)) { New-Item -ItemType Directory -Path $PlanDir -Force | Out-Null }
+        $env:PLAN_DIR = $PlanDir
+        $PlanningBlock = @"
+
+### MANDATORY PLANNING STEP:
+1. Your FIRST action is to create a detailed plan file in "$PlanDir".
+2. Use `write_file` to save the plan (Format: plan_task_timestamp.md).
+3. After writing the file, call `Invoke-Flow.ps1` with the task: 'Implement the plan located at: [Full Path To File]'.
+4. DO NOT repeat the plan in the command line, only pass the path.
+"@
+    }
+
     $DispatcherInstructions = @"
 
 $StartMarker
 ## ROLE: STRATEGIC PLANNER & DELEGATOR
 You are a high-level Orchestrator. Your primary goal is to analyze tasks, create detailed implementation plans, and delegate ALL file-system modifications to specialized CLI tools (Gemini, Codex, etc.) via the Dispatcher.
+$PlanningBlock
 
 ### MANDATORY RULE: NO DIRECT FILE EDITING
 You are **strictly prohibited** from using built-in editing tools (like `edit_file` or `write_file`) for project source code. You MUST delegate all implementation tasks to the Dispatcher.
@@ -81,9 +100,14 @@ $EndMarker
         $NewContent = $NewContent.Trim()
         Set-Content -Path $TargetFile -Value $NewContent -Encoding UTF8
     }
-    elseif ($Action -eq "On" -and -not $HasBlock) {
-        Write-Host "[+] Adding Dispatcher directives to $(Split-Path $TargetFile -Leaf)..." -ForegroundColor Green
-        $NewContent = $Content.Trim() + "`n`n" + $DispatcherInstructions
+    elseif ($Action -eq "On") {
+        if ($HasBlock) {
+            Write-Host "[*] Updating Dispatcher directives in $(Split-Path $TargetFile -Leaf)..." -ForegroundColor Cyan
+            $NewContent = $Content -replace "(?s)$StartMarker.*$EndMarker", $DispatcherInstructions.Trim()
+        } else {
+            Write-Host "[+] Adding Dispatcher directives to $(Split-Path $TargetFile -Leaf)..." -ForegroundColor Green
+            $NewContent = $Content.Trim() + "`n`n" + $DispatcherInstructions
+        }
         Set-Content -Path $TargetFile -Value $NewContent -Encoding UTF8
     }
 }
@@ -203,9 +227,44 @@ Toggle-Feature -Feature "Hooks"  -Enable ($Mode -eq "Hooks")
 # 6.3 Global Hook Registration (XOR)
 Update-GlobalHooks -Enable ($Mode -eq "Hooks")
 
-# 6.4 Base Infrastructure
-Toggle-Feature -Feature "Roles"   -Enable $true
-Toggle-Feature -Feature "Scripts" -Enable $true
+    # 6.4 Base Infrastructure
+    Toggle-Feature -Feature "Roles"   -Enable $true
+    Toggle-Feature -Feature "Scripts" -Enable $true
+
+    # --- 6.5 Planning Surgical Update ---
+    if ($Settings.planning.enabled) {
+        $PlanDir = if ($Scope -eq "Global") { Join-Path $PWD "plans" } else { Join-Path $ProjectRoot "plans" }
+        
+        # Update Agents if enabled
+        if ($Mode -eq "Agents") {
+            $OrchestratorPath = Join-Path $TgtPaths["Agents"] "orchestrator.md"
+            if (Test-Path $OrchestratorPath) {
+                $Content = Get-Content $OrchestratorPath -Raw
+                if (-not ($Content -match "MANDATORY PLANNING STEP")) {
+                    $PlanningInstr = @"
+
+## MANDATORY PLANNING STEP
+1. Your FIRST action is to create a detailed plan file in `$PlanDir`.
+2. Use `write_file` to save the plan (Format: plan_task_timestamp.md).
+3. After writing the file, call `Invoke-Flow.ps1` with the task: 'Implement the plan located at: [Full Path To File]'.
+4. DO NOT repeat the plan in the command line, only pass the path.
+"@
+                    $Content = $Content -replace "## Your job", "## Your job`n$PlanningInstr"
+                    Set-Content -Path $OrchestratorPath -Value $Content -Encoding UTF8
+                }
+            }
+        }
+
+        # Update Skills if enabled
+        if ($Mode -eq "Skills") {
+            $PlannerSkillPath = Join-Path $TgtPaths["Skills"] "planner\SKILL.md"
+            if (Test-Path $PlannerSkillPath) {
+                $Content = Get-Content $PlannerSkillPath -Raw
+                $Content = $Content -replace "\$env:PLAN_DIR", $PlanDir
+                Set-Content -Path $PlannerSkillPath -Value $Content -Encoding UTF8
+            }
+        }
+    }
 
 # --- 7. Sync Configs ---
 Copy-Item -Force (Join-Path $ProjectRoot "project.settings.json") $ProjSettingsFile

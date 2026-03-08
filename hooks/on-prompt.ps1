@@ -13,12 +13,17 @@
 
 # ── Resolve config path ──
 $globalDir        = Split-Path $PSScriptRoot -Parent
-$localConfigPath  = Join-Path $PWD ".claude\dispatcher.config.json"
-$globalConfigPath = Join-Path $globalDir "dispatcher.config.json"
+$localSettingsPath = Join-Path $PWD "project.settings.json"
+if (-not (Test-Path $localSettingsPath)) { $localSettingsPath = Join-Path $PWD ".claude\project.settings.json" }
+$globalSettingsPath = Join-Path $globalDir "project.settings.json"
 
-if (Test-Path $localConfigPath) { $configPath = $localConfigPath }
-elseif (Test-Path $globalConfigPath) { $configPath = $globalConfigPath }
-else { $configPath = "" }
+$settings = $null
+if (Test-Path $localSettingsPath) { $settings = Get-Content $localSettingsPath -Raw | ConvertFrom-Json }
+elseif (Test-Path $globalSettingsPath) { $settings = Get-Content $globalSettingsPath -Raw | ConvertFrom-Json }
+
+$PlanDir = if ($settings.planning.enabled) { 
+    if ($settings.mode -eq "global") { Join-Path $PWD "plans" } else { Join-Path $PWD "plans" } # Simplification for now
+} else { $null }
 
 # ── Absolute path to Invoke-Flow.ps1 (the new universal executor) ──
 $invokeFlow = Join-Path $PWD "scripts\Invoke-Flow.ps1"
@@ -42,6 +47,18 @@ $questionPatterns = @('^\s*что такое ', '^\s*what is ', '^\s*как ра
 $promptLower = $prompt.ToLower()
 foreach ($p in $questionPatterns) { if ($promptLower -match $p) { $isSimpleQuestion = $true; break } }
 
+$PlanningBlock = ""
+if ($settings.planning.enabled) {
+    $PlanningBlock = @"
+
+STEP 0 - MANDATORY PLANNING:
+  1. Your FIRST action is to create a detailed plan file in `$PlanDir`.
+  2. Use `write_file` to save the plan (Format: plan_task_timestamp.md).
+  3. After writing the file, call `Invoke-Flow.ps1` with the task: 'Implement the plan located at: [Full Path To File]'.
+  4. DO NOT repeat the plan in the command line, only pass the path.
+"@
+}
+
 # ── Output mandatory instruction ───────────────────────────────
 if (-not $isSimpleQuestion -and $prompt.Length -gt 10) {
     $instruction = @"
@@ -51,6 +68,7 @@ if (-not $isSimpleQuestion -and $prompt.Length -gt 10) {
 ================================================================================
 YOU ARE STRICTLY PROHIBITED FROM DIRECT FILE EDITING (write_file, edit_file, replace).
 You MUST delegate all implementation tasks to Gemini/Codex via the Flow Executor.
+$PlanningBlock
 
 NO IN-CHAT IMPLEMENTATION: Do NOT write implementation code or provide complete scripts directly in the chat. Even if the user asks 'Show me a script', treat it as a request to CREATE a file. Immediately provide a plan and use Invoke-Flow.ps1. Your role is a Planner, not a Coder.
 

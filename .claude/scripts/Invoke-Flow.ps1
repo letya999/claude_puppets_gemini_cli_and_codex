@@ -12,17 +12,30 @@ $ErrorActionPreference = "Stop"
 # --- 1. Path Resolution ---
 $CurrentDir = Get-Location
 $GlobalBase = Join-Path $env:USERPROFILE ".claude"
-$LocalBase  = $CurrentDir
+$LocalClaudeDir = Join-Path $CurrentDir ".claude"
 
-# Prioritize local config, fallback to global
-$SettingsFile = if (Test-Path "$LocalBase\project.settings.json") { "$LocalBase\project.settings.json" } else { "$GlobalBase\project.settings.json" }
-if (-not (Test-Path $SettingsFile)) { throw "Dispatcher not installed. Run Install-Dispatcher.ps1 first." }
-$Settings = Get-Content $SettingsFile | ConvertFrom-Json
+# Prioritize local config (prefer .claude subdir if it exists, fallback to root)
+$SettingsFile = if (Test-Path "$LocalClaudeDir\project.settings.json") { "$LocalClaudeDir\project.settings.json" } 
+                elseif (Test-Path "$CurrentDir\project.settings.json") { "$CurrentDir\project.settings.json" }
+                else { "$GlobalBase\project.settings.json" }
 
-$FlowConfigFile = if ($Settings.mode -eq "local") { Join-Path $CurrentDir "flow.config.json" } else { Join-Path $GlobalBase "flow.config.json" }
-$FlowConfig = Get-Content $FlowConfigFile | ConvertFrom-Json
+if (-not (Test-Path $SettingsFile)) { throw "Dispatcher settings not found. Run Install-Dispatcher.ps1 or Switch-Mode.ps1." }
+$Settings = Get-Content $SettingsFile -Raw | ConvertFrom-Json
 
-$RolesDir = if ($Settings.mode -eq "local") { "$LocalBase\roles" } else { "$GlobalBase\roles" }
+$FlowConfigFile = if ($Settings.mode -eq "local") { 
+    if (Test-Path "$LocalClaudeDir\flow.config.json") { "$LocalClaudeDir\flow.config.json" } else { "$CurrentDir\flow.config.json" }
+} else { 
+    Join-Path $GlobalBase "flow.config.json" 
+}
+
+if (-not (Test-Path $FlowConfigFile)) { throw "Flow config not found at $FlowConfigFile." }
+$FlowConfig = Get-Content $FlowConfigFile -Raw | ConvertFrom-Json
+
+$RolesDir = if ($Settings.mode -eq "local") { 
+    if (Test-Path "$LocalClaudeDir\roles") { "$LocalClaudeDir\roles" } else { "$CurrentDir\roles" }
+} else { 
+    Join-Path $GlobalBase "roles" 
+}
 
 # Resolve Flow: Parameter > Config Default > Hardcoded fallback
 $TargetFlow = if ($Flow) { $Flow } elseif ($FlowConfig.defaultFlow) { $FlowConfig.defaultFlow } else { "standard" }
@@ -54,7 +67,18 @@ foreach ($Step in $SelectedFlow.steps) {
     Write-Host ">>> Step: $StepName | Tool: $Tool | Role: $Role" -ForegroundColor Yellow
 
     $RoleFile = Join-Path $RolesDir "$Role.md"
-    $SystemPrompt = if (Test-Path $RoleFile) { Get-Content $RoleFile -Raw } else { "" }
+    $SystemPrompt = if (Test-Path $RoleFile) { Get-Content $RoleFile -Raw } else { 
+        Write-Warning "Role file not found: $RoleFile. Using empty system prompt."
+        "" 
+    }
+    
+    # --- Planning Detection ---
+    $IsPlanFile = $Task -match "\.md$" -and (Test-Path $Task)
+    if ($IsPlanFile) {
+        $PlanContent = Get-Content $Task -Raw
+        $Task = "CRITICAL: You are in IMPLEMENTATION mode. Read the plan below carefully. Use `read_file` if needed, but the plan content is also provided here for convenience.`n`nPLAN FILE: $Task`nPLAN CONTENT:`n$PlanContent`n`nINSTRUCTION: Execute the plan step-by-step. Update the plan file by marking completed tasks with [x] using `replace`. DO NOT ask questions. Just implement."
+    }
+
     $CleanContext = Sanitize-Prompt -RawContent $Context
     $FinalPrompt = "$SystemPrompt`n`nCONTEXT:`n$CleanContext`n`nTASK:`n$Task"
 
@@ -66,29 +90,30 @@ foreach ($Step in $SelectedFlow.steps) {
         switch ($Tool) {
             "gemini" {
                 if (-not (Get-Command gemini -ErrorAction SilentlyContinue)) { throw "Gemini CLI not found." }
-                # Use --prompt flag and ensure it's treated as a single argument
-                $Args = @("--prompt", $FinalPrompt)
-                if ($Model) { $Args += "--model"; $Args += $Model }
-                if ($UseYolo) { $Args += "--yolo" }
-                $Output = & gemini @Args
+                # Using explicit string construction for the command to avoid argument splatting issues on Windows
+                $GeminiCmd = "gemini -p `"$($FinalPrompt -replace '"', '\"')`""
+                if ($Model) { $GeminiCmd += " --model $Model" }
+                if ($UseYolo) { $GeminiCmd += " --yolo" }
+                
+                # Use Invoke-Expression or direct call with string to ensure -p is respected
+                $Output = iex $GeminiCmd
             }
             "claude" {
-                $Args = @("-p", $FinalPrompt)
-                if ($UseYolo) { $Args += "--dangerously-skip-permissions" }
-                $Output = & claude @Args
+                $ClaudeCmd = "claude -p `"$($FinalPrompt -replace '"', '\"')`""
+                if ($UseYolo) { $ClaudeCmd += " --dangerously-skip-permissions" }
+                $Output = iex $ClaudeCmd
             }
             "codex" {
-                # Fallback to gemini if codex missing
                 if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
                     Write-Warning "Codex missing, falling back to Gemini..."
-                    $Args = @("--prompt", $FinalPrompt)
-                    if ($UseYolo) { $Args += "--yolo" }
-                    $Output = & gemini @Args
+                    $GeminiCmd = "gemini -p `"$($FinalPrompt -replace '"', '\"')`""
+                    if ($UseYolo) { $GeminiCmd += " --yolo" }
+                    $Output = iex $GeminiCmd
                 } else {
-                    $Args = @("run", "--prompt", $FinalPrompt)
-                    if ($Model) { $Args += "--model"; $Args += $Model }
-                    if ($UseYolo) { $Args += "--yolo" }
-                    $Output = & codex @Args
+                    $CodexCmd = "codex run -p `"$($FinalPrompt -replace '"', '\"')`""
+                    if ($Model) { $CodexCmd += " --model $Model" }
+                    if ($UseYolo) { $CodexCmd += " --yolo" }
+                    $Output = iex $CodexCmd
                 }
             }
             Default { Write-Warning "Unknown tool: $Tool" }

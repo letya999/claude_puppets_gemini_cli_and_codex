@@ -29,5 +29,9 @@
       "enabled": false,
       "description": "Использование профилей агентов (researcher, coder и т.д.)"
     }
+  },
+  "planning": {
+    "enabled": true,
+    "dirName": "plans"
   }
 }

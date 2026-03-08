@@ -14,7 +14,7 @@
               },
     "formats":  {
                     "directives":  {
-                                       "enabled":  false,
+                                       "enabled":  true,
                                        "description":  "Инструкции в CLAUDE.md для управления Claude Code"
                                    },
                     "hooks":  {
@@ -26,8 +26,12 @@
                                    "description":  "Интеграция кастомных JavaScript навыков"
                                },
                     "subagents":  {
-                                      "enabled":  true,
+                                      "enabled":  false,
                                       "description":  "Использование профилей агентов (researcher, coder и т.д.)"
                                   }
-                }
+                },
+    "planning":  {
+                     "enabled":  true,
+                     "dirName":  "plans"
+                 }
 }

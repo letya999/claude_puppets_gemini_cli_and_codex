@@ -72,6 +72,13 @@ foreach ($Step in $SelectedFlow.steps) {
         "" 
     }
     
+    # --- Planning Detection ---
+    $IsPlanFile = $Task -match "\.md$" -and (Test-Path $Task)
+    if ($IsPlanFile) {
+        $PlanContent = Get-Content $Task -Raw
+        $Task = "CRITICAL: You are in IMPLEMENTATION mode. Read the plan below carefully. Use `read_file` if needed, but the plan content is also provided here for convenience.`n`nPLAN FILE: $Task`nPLAN CONTENT:`n$PlanContent`n`nINSTRUCTION: Execute the plan step-by-step. Update the plan file by marking completed tasks with [x] using `replace`. DO NOT ask questions. Just implement."
+    }
+
     $CleanContext = Sanitize-Prompt -RawContent $Context
     $FinalPrompt = "$SystemPrompt`n`nCONTEXT:`n$CleanContext`n`nTASK:`n$Task"
 
