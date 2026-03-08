@@ -34,10 +34,35 @@ function Toggle-Feature {
     $SrcDir = $SrcPaths[$Feature]; $TgtDir = $TgtPaths[$Feature]
     if (-not (Test-Path $SrcDir)) { return }
     if (-not (Test-Path $TgtDir)) { New-Item -ItemType Directory -Path $TgtDir -Force | Out-Null }
-    foreach ($Item in Get-ChildItem $SrcDir) {
-        $TargetPath = Join-Path $TgtDir $Item.Name
-        if ($Enable) { Copy-Item -Recurse -Force $Item.FullName $TargetPath }
-        else { if (Test-Path $TargetPath) { Remove-Item -Recurse -Force $TargetPath } }
+    
+    $SrcItems = Get-ChildItem $SrcDir
+    if ($Enable) {
+        Write-Host "[+] Enabling $Feature ($Scope scope)..." -ForegroundColor Green
+        foreach ($Item in $SrcItems) {
+            $TargetPath = Join-Path $TgtDir $Item.Name
+            Copy-Item -Recurse -Force $Item.FullName $TargetPath
+        }
+        
+        # Cleanup stale items: if it's in target but NOT in source, remove it.
+        # This ensures that deletions in source are reflected in target.
+        # We only do this for Local scope to avoid wiping other global tools.
+        if ($Scope -eq "Local") {
+            foreach ($TgtItem in Get-ChildItem $TgtDir) {
+                if (-not (Test-Path (Join-Path $SrcDir $TgtItem.Name))) {
+                    Remove-Item -Recurse -Force $TgtItem.FullName
+                    Write-Host "    [-] Removed stale $Feature item: $($TgtItem.Name)" -ForegroundColor Yellow
+                }
+            }
+        }
+    } else {
+        Write-Host "[-] Disabling $Feature ($Scope scope)..." -ForegroundColor Yellow
+        foreach ($Item in $SrcItems) {
+            $TargetPath = Join-Path $TgtDir $Item.Name
+            if (Test-Path $TargetPath) { 
+                Remove-Item -Recurse -Force $TargetPath 
+                Write-Host "    [-] Removed $Feature item: $($Item.Name)" -ForegroundColor DarkGray
+            }
+        }
     }
 }
 

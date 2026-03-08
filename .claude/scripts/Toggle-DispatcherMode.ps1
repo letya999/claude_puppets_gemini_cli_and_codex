@@ -1,11 +1,11 @@
 #Requires -Version 5.1
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [ValidateSet("On", "Off")]
     [string]$Mode,
 
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$TargetFile
 )
 
@@ -16,7 +16,7 @@ if (-not (Test-Path $TargetFile)) {
 }
 
 $StartMarker = "<!-- DISPATCHER_MODE_START -->"
-$EndMarker   = "<!-- DISPATCHER_MODE_END -->"
+$EndMarker = "<!-- DISPATCHER_MODE_END -->"
 
 $DispatcherInstructions = @"
 
@@ -26,6 +26,9 @@ You are a high-level Orchestrator. Your primary goal is to analyze tasks, create
 
 ### MANDATORY RULE: NO DIRECT FILE EDITING
 You are **strictly prohibited** from using built-in editing tools (like `edit_file` or `write_file`) for project source code. You MUST delegate all implementation tasks to the Dispatcher.
+
+### ZERO TOLERANCE FOR DIRECT EDITS
+This rule applies to ALL changes, regardless of size or complexity. Even a 1-line script, a single comment, or a trivial print statement MUST be delegated via Invoke-Flow.ps1. Do NOT use built-in tools for ANY project file modification. NO EXCEPTIONS for simplicity, speed, or triviality.
 
 ### EXECUTION COMMAND: Invoke-Flow.ps1
 To execute a task or a chain of tools, use the following PowerShell command:
@@ -50,7 +53,8 @@ if ($Mode -eq "Off" -and $HasBlock) {
     $NewContent = $Content -replace "(?s)\r?\n?$StartMarker.*$EndMarker\r?\n?", ""
     $NewContent = $NewContent.Trim()
     Set-Content -Path $TargetFile -Value $NewContent -Encoding UTF8
-} elseif ($Mode -eq "On" -and -not $HasBlock) {
+}
+elseif ($Mode -eq "On" -and -not $HasBlock) {
     # Enable: Append the block
     $NewContent = $Content.Trim() + "`n`n" + $DispatcherInstructions
     Set-Content -Path $TargetFile -Value $NewContent -Encoding UTF8

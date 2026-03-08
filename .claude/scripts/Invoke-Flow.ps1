@@ -1,19 +1,9 @@
 #Requires -Version 5.1
 
-<#
-.SYNOPSIS
-    Universal Flow Executor (v2.1).
-.DESCRIPTION
-    Executes toolchains from flow.config.json.
-    - Resolves Roles from .claude/roles/ or global path.
-    - Executes gemini, claude, or codex cli.
-    - Supports MCP-like task delegation.
-#>
-
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)] [string]$Task,
-    [Parameter()] [string]$Flow = "standard",
+    [Parameter()] [string]$Flow = "", # Leave empty to use default from config
     [Parameter()] [switch]$Yolo
 )
 
@@ -34,10 +24,13 @@ $FlowConfig = Get-Content $FlowConfigFile | ConvertFrom-Json
 
 $RolesDir = if ($Settings.mode -eq "local") { "$LocalBase\roles" } else { "$GlobalBase\roles" }
 
-$SelectedFlow = $FlowConfig.flows.$Flow
-if (-not $SelectedFlow) { throw "Flow '$Flow' not found in config." }
+# Resolve Flow: Parameter > Config Default > Hardcoded fallback
+$TargetFlow = if ($Flow) { $Flow } elseif ($FlowConfig.defaultFlow) { $FlowConfig.defaultFlow } else { "standard" }
 
-Write-Host "`n[FLOW] Starting '$Flow' (Mode: $($Settings.mode))`n" -ForegroundColor Cyan
+$SelectedFlow = $FlowConfig.flows.$TargetFlow
+if (-not $SelectedFlow) { throw "Flow '$TargetFlow' not found in config." }
+
+Write-Host "`n[FLOW] Starting '$TargetFlow' (Mode: $($Settings.mode))`n" -ForegroundColor Cyan
 
 $Context = ""
 
@@ -45,14 +38,9 @@ $Context = ""
 function Sanitize-Prompt {
     param([string]$RawContent)
     if (-not $RawContent) { return "" }
-
-    # Remove <thinking> and <thought> blocks (multi-line supported)
     $Sanitized = $RawContent -replace '(?s)<thinking>.*?</thinking>', ''
     $Sanitized = $Sanitized -replace '(?s)<thought>.*?</thought>', ''
-    
-    # Remove excessive blank lines
     $Sanitized = $Sanitized -replace '(\r?\n){3,}', "`n`n"
-    
     return $Sanitized.Trim()
 }
 
@@ -65,45 +53,48 @@ foreach ($Step in $SelectedFlow.steps) {
 
     Write-Host ">>> Step: $StepName | Tool: $Tool | Role: $Role" -ForegroundColor Yellow
 
-    # Resolve Role (System Prompt)
     $RoleFile = Join-Path $RolesDir "$Role.md"
     $SystemPrompt = if (Test-Path $RoleFile) { Get-Content $RoleFile -Raw } else { "" }
-
-    # Sanitize accumulated context before passing to the next model
     $CleanContext = Sanitize-Prompt -RawContent $Context
-
-    # Build Final Prompt: System Prompt + Context + Task
     $FinalPrompt = "$SystemPrompt`n`nCONTEXT:`n$CleanContext`n`nTASK:`n$Task"
 
     $Output = ""
+    $OldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     
-    switch ($Tool) {
-        "gemini" {
-            # Recommended: use positional prompt to avoid flag conflicts
-            $Args = @($FinalPrompt)
-            if ($Model) { $Args += "--model"; $Args += $Model }
-            if ($UseYolo) { $Args += "--yolo" }
-            $Output = & gemini @Args
+    try {
+        switch ($Tool) {
+            "gemini" {
+                if (-not (Get-Command gemini -ErrorAction SilentlyContinue)) { throw "Gemini CLI not found." }
+                # Use --prompt flag and ensure it's treated as a single argument
+                $Args = @("--prompt", $FinalPrompt)
+                if ($Model) { $Args += "--model"; $Args += $Model }
+                if ($UseYolo) { $Args += "--yolo" }
+                $Output = & gemini @Args
+            }
+            "claude" {
+                $Args = @("-p", $FinalPrompt)
+                if ($UseYolo) { $Args += "--dangerously-skip-permissions" }
+                $Output = & claude @Args
+            }
+            "codex" {
+                # Fallback to gemini if codex missing
+                if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
+                    Write-Warning "Codex missing, falling back to Gemini..."
+                    $Args = @("--prompt", $FinalPrompt)
+                    if ($UseYolo) { $Args += "--yolo" }
+                    $Output = & gemini @Args
+                } else {
+                    $Args = @("run", "--prompt", $FinalPrompt)
+                    if ($Model) { $Args += "--model"; $Args += $Model }
+                    if ($UseYolo) { $Args += "--yolo" }
+                    $Output = & codex @Args
+                }
+            }
+            Default { Write-Warning "Unknown tool: $Tool" }
         }
-        "claude" {
-            $Args = @("-p", $FinalPrompt)
-            if ($UseYolo) { $Args += "--dangerously-skip-permissions" }
-            $Output = & claude @Args
-        }
-        "codex" {
-            $Args = @("run", "--prompt", $FinalPrompt)
-            if ($Model) { $Args += "--model"; $Args += $Model }
-            if ($UseYolo) { $Args += "--dangerously-bypass-approvals-and-sandbox" }
-            $Output = & codex @Args
-        }
-        "mcp" {
-            # Placeholder for MCP bridge
-            $Output = "[MCP Output Placeholder]"
-        }
-        Default {
-            Write-Warning "Unknown tool: $Tool"
-            $Output = "[Unknown Tool Output]"
-        }
+    } finally {
+        $ErrorActionPreference = $OldEAP
     }
 
     $Context += "`n--- Output from $StepName ($Tool) ---`n$Output`n"

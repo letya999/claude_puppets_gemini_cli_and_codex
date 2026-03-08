@@ -10,20 +10,15 @@ Use this skill when:
 Delegates code implementation to Codex CLI (OpenAI) and/or
 delegates code review/correction to Gemini (research step) and Codex (implementation step).
 
-## CLAUDE BEHAVIOR (Framing)
-- **Complex Features:** Use a flow with a research step (e.g., `-Flow "standard"`) to analyze requirements and existing code before implementation.
-- **Quick Fixes:** Use the default flow (omit `-Flow`) for simple bug fixes or localized changes.
-- **Autonomous Implementation:** Always use the `-Yolo` flag to allow the Dispatcher to execute the implementation without redundant confirmation prompts.
-
 ## INVOCATION (Local Project Flow)
 
-Check `flow.config.json` for available flows. Use the one that includes a research step (usually `standard`) for complex tasks, or the default flow for simple implementations.
+Run in PowerShell:
 
 ```powershell
-# Full cycle: Research + Implement (check flow.config.json for flow name, e.g. "standard")
+# Full cycle: Research + Implement (uses standard flow)
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "Implement speed measurement" -Flow "standard" -Yolo
 
-# Simple implementation (omitting -Flow uses "defaultFlow" from config)
+# Implementation only (via gemini-only chain for now)
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "Fix this Python function" -Yolo
 ```
 

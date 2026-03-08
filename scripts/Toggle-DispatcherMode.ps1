@@ -31,10 +31,10 @@ You are **strictly prohibited** from using built-in editing tools (like `edit_fi
 This rule applies to ALL changes, regardless of size or complexity. Even a 1-line script, a single comment, or a trivial print statement MUST be delegated via Invoke-Flow.ps1. Do NOT use built-in tools for ANY project file modification. NO EXCEPTIONS for simplicity, speed, or triviality.
 
 ### EXECUTION COMMAND: Invoke-Flow.ps1
-To execute a task or a chain of tools, use the following PowerShell command:
+To execute a task or a chain of tools, use the following PowerShell command. Check `flow.config.json` for available flows (e.g., "standard" or use the default by omitting the `-Flow` parameter).
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "Your detailed task description" -Flow "standard"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "Your detailed task description" -Flow "standard" -Yolo
 ```
 
 ### WORKFLOW:

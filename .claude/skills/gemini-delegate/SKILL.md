@@ -9,20 +9,15 @@ Use this skill for:
 Delegates the current task to Gemini CLI via the Dispatcher.
 Claude Code remains the Planner; Gemini is the Executor.
 
-## CLAUDE BEHAVIOR (Framing)
-- **Multi-step Research:** Use a flow that starts with research if the task requires deep codebase analysis.
-- **Large Changes:** Delegate large-scale implementation tasks to Gemini via the default flow.
-- **Self-Correction:** If the flow output contains errors, analyze them and run the flow again with a more detailed task description.
-
 ## INVOCATION
 
-Always use the project-local Flow Executor. Check `flow.config.json` for available flows.
+Always use the project-local Flow Executor:
 
 ```powershell
-# Execute task using "defaultFlow" from config (e.g. "claude_chain")
+# Execute task using default flow (claude_chain)
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "YOUR_TASK_HERE" -Yolo
 
-# Force a specific flow from config (e.g. "standard" for Research -> Implement)
+# Force 'standard' flow (Research -> Implement)
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "YOUR_TASK_HERE" -Flow "standard" -Yolo
 ```
 

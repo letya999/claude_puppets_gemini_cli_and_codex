@@ -14,7 +14,7 @@
               },
     "formats":  {
                     "directives":  {
-                                       "enabled":  true,
+                                       "enabled":  false,
                                        "description":  "Инструкции в CLAUDE.md для управления Claude Code"
                                    },
                     "hooks":  {
@@ -22,7 +22,7 @@
                                   "description":  "Автоматические хуки на ввод пользователя (только Global)"
                               },
                     "skills":  {
-                                   "enabled":  false,
+                                   "enabled":  true,
                                    "description":  "Интеграция кастомных JavaScript навыков"
                                },
                     "subagents":  {
