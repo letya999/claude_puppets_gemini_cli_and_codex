@@ -51,17 +51,19 @@ function Set-MarkdownBlock {
     # Read planning config
     $Settings = Get-Content (Join-Path $ProjectRoot "project.settings.json") -Raw | ConvertFrom-Json
     $PlanDir = if ($Scope -eq "Global") { Join-Path $PWD "plans" } else { Join-Path $ProjectRoot "plans" }
-    
+
     $PlanningBlock = ""
     if ($Settings.planning.enabled) {
         if (-not (Test-Path $PlanDir)) { New-Item -ItemType Directory -Path $PlanDir -Force | Out-Null }
         $env:PLAN_DIR = $PlanDir
+        # Force set in current session for visibility
+        [Environment]::SetEnvironmentVariable("PLAN_DIR", $PlanDir, "Process")
         $PlanningBlock = @"
-
+    ...
 ### MANDATORY PLANNING STEP:
 1. Your FIRST action is to create a detailed plan file in "$PlanDir".
-2. Use `write_file` to save the plan (Format: plan_task_timestamp.md).
-3. After writing the file, call `Invoke-Flow.ps1` with the task: 'Implement the plan located at: [Full Path To File]'.
+2. Use the Write tool to save the plan (Format: plan_task_timestamp.md).
+3. After writing the file, call Invoke-Flow.ps1 with the task: 'Implement the plan located at: [Full Path To File]'.
 4. DO NOT repeat the plan in the command line, only pass the path.
 "@
     }
@@ -74,13 +76,13 @@ You are a high-level Orchestrator. Your primary goal is to analyze tasks, create
 $PlanningBlock
 
 ### MANDATORY RULE: NO DIRECT FILE EDITING
-You are **strictly prohibited** from using built-in editing tools (like `edit_file` or `write_file`) for project source code. You MUST delegate all implementation tasks to the Dispatcher.
+You are **strictly prohibited** from using built-in editing tools (Edit, Write) for project source code. Writing plan files to plans/ is the ONLY exception. You MUST delegate all source code changes to the Dispatcher.
 
 ### EXECUTION COMMAND: Invoke-Flow.ps1
-To execute a task or a chain of tools, use the following PowerShell command.
+Use the default flow from flow.config.json. Do NOT hardcode -Flow unless you need to override the default.
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "Your detailed task description" -Flow "standard" -Yolo
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "Implement the plan located at: C:\full\path\to\plan.md" -Yolo
 ```
 
 ### WORKFLOW:
@@ -245,8 +247,8 @@ Update-GlobalHooks -Enable ($Mode -eq "Hooks")
 
 ## MANDATORY PLANNING STEP
 1. Your FIRST action is to create a detailed plan file in `$PlanDir`.
-2. Use `write_file` to save the plan (Format: plan_task_timestamp.md).
-3. After writing the file, call `Invoke-Flow.ps1` with the task: 'Implement the plan located at: [Full Path To File]'.
+2. Use the Write tool to save the plan (Format: plan_task_timestamp.md).
+3. After writing the file, call Invoke-Flow.ps1 with the task: 'Implement the plan located at: [Full Path To File]'.
 4. DO NOT repeat the plan in the command line, only pass the path.
 "@
                     $Content = $Content -replace "## Your job", "## Your job`n$PlanningInstr"
@@ -259,8 +261,12 @@ Update-GlobalHooks -Enable ($Mode -eq "Hooks")
         if ($Mode -eq "Skills") {
             $PlannerSkillPath = Join-Path $TgtPaths["Skills"] "planner\SKILL.md"
             if (Test-Path $PlannerSkillPath) {
+                # Read from target because it was just copied
                 $Content = Get-Content $PlannerSkillPath -Raw
-                $Content = $Content -replace "\$env:PLAN_DIR", $PlanDir
+                # Escape backslashes for JS/Markdown safety
+                $EscapedPlanDir = $PlanDir -replace "\\", "\\"
+                # Use literal string for the search pattern
+                $Content = $Content -replace '\$env:PLAN_DIR', $EscapedPlanDir
                 Set-Content -Path $PlannerSkillPath -Value $Content -Encoding UTF8
             }
         }

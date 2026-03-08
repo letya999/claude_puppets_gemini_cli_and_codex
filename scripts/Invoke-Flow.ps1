@@ -90,10 +90,10 @@ foreach ($Step in $SelectedFlow.steps) {
         switch ($Tool) {
             "gemini" {
                 if (-not (Get-Command gemini -ErrorAction SilentlyContinue)) { throw "Gemini CLI not found." }
-                $GeminiArgs = @('-p', $FinalPrompt)
+                $GeminiArgs = @()
                 if ($Model) { $GeminiArgs += @('--model', $Model) }
                 if ($UseYolo) { $GeminiArgs += '--yolo' }
-                $Output = & gemini @GeminiArgs
+                $Output = & gemini -p "$FinalPrompt" @GeminiArgs
             }
             "claude" {
                 $ClaudeArgs = @('-p', $FinalPrompt)
@@ -103,9 +103,9 @@ foreach ($Step in $SelectedFlow.steps) {
             "codex" {
                 if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
                     Write-Warning "Codex missing, falling back to Gemini..."
-                    $GeminiArgs = @('-p', $FinalPrompt)
+                    $GeminiArgs = @()
                     if ($UseYolo) { $GeminiArgs += '--yolo' }
-                    $Output = & gemini @GeminiArgs
+                    $Output = & gemini -p "$FinalPrompt" @GeminiArgs
                 } else {
                     $CodexArgs = @('run', '-p', $FinalPrompt)
                     if ($Model) { $CodexArgs += @('--model', $Model) }

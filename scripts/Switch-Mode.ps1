@@ -51,13 +51,15 @@ function Set-MarkdownBlock {
     # Read planning config
     $Settings = Get-Content (Join-Path $ProjectRoot "project.settings.json") -Raw | ConvertFrom-Json
     $PlanDir = if ($Scope -eq "Global") { Join-Path $PWD "plans" } else { Join-Path $ProjectRoot "plans" }
-    
+
     $PlanningBlock = ""
     if ($Settings.planning.enabled) {
         if (-not (Test-Path $PlanDir)) { New-Item -ItemType Directory -Path $PlanDir -Force | Out-Null }
         $env:PLAN_DIR = $PlanDir
+        # Force set in current session for visibility
+        [Environment]::SetEnvironmentVariable("PLAN_DIR", $PlanDir, "Process")
         $PlanningBlock = @"
-
+    ...
 ### MANDATORY PLANNING STEP:
 1. Your FIRST action is to create a detailed plan file in "$PlanDir".
 2. Use the Write tool to save the plan (Format: plan_task_timestamp.md).
@@ -259,8 +261,12 @@ Update-GlobalHooks -Enable ($Mode -eq "Hooks")
         if ($Mode -eq "Skills") {
             $PlannerSkillPath = Join-Path $TgtPaths["Skills"] "planner\SKILL.md"
             if (Test-Path $PlannerSkillPath) {
+                # Read from target because it was just copied
                 $Content = Get-Content $PlannerSkillPath -Raw
-                $Content = $Content -replace "\$env:PLAN_DIR", $PlanDir
+                # Escape backslashes for JS/Markdown safety
+                $EscapedPlanDir = $PlanDir -replace "\\", "\\"
+                # Use literal string for the search pattern
+                $Content = $Content -replace '\$env:PLAN_DIR', $EscapedPlanDir
                 Set-Content -Path $PlannerSkillPath -Value $Content -Encoding UTF8
             }
         }
