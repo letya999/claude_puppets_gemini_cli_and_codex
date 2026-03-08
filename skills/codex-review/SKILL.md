@@ -9,6 +9,7 @@ Use this skill when:
 ## WHAT THIS SKILL DOES
 Delegates code implementation to Codex CLI (OpenAI) and/or
 delegates code review/correction to Gemini (research step) and Codex (implementation step).
+Uses 'codex run --yolo --non-interactive' for execution.
 
 ## CLAUDE BEHAVIOR (Framing)
 - **Complex Features:** Use a flow with a research step (e.g., `-Flow "standard"`) to analyze requirements and existing code before implementation.

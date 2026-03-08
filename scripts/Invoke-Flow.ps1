@@ -107,9 +107,21 @@ foreach ($Step in $SelectedFlow.steps) {
                     if ($UseYolo) { $GeminiArgs += '--yolo' }
                     $Output = & gemini -p "$FinalPrompt" @GeminiArgs
                 } else {
-                    $CodexArgs = @('run', '-p', $FinalPrompt)
+                    # Official Codex CLI (OpenAI) expects 'run' or direct prompt.
+                    # Based on latest community gists, 'codex run' is preferred.
+                    $CodexArgs = @('run')
+                    
+                    if ($UseYolo) { 
+                        $CodexArgs += '--yolo'
+                        $CodexArgs += '--non-interactive'
+                    }
+                    
                     if ($Model) { $CodexArgs += @('--model', $Model) }
-                    if ($UseYolo) { $CodexArgs += '--yolo' }
+                    
+                    # Pass the prompt using the -p flag
+                    $CodexArgs += @('-p', $FinalPrompt)
+                    
+                    Write-Host "Executing: codex $($CodexArgs -join ' ')" -ForegroundColor DarkGray
                     $Output = & codex @CodexArgs
                 }
             }
