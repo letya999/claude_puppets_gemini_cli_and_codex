@@ -130,24 +130,58 @@ function Update-GlobalHooks {
 
     $HookFileName = "on-prompt.ps1"
     $HookPath = Join-Path $TgtPaths["Hooks"] $HookFileName
+    $HookCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$HookPath`""
 
     try {
         $RawJson = Get-Content $GlobalClaudeSettings -Raw -Encoding UTF8
+        # Convert to a nested hashtable for easier manipulation
         $Settings = $RawJson | ConvertFrom-Json
+        
+        # Ensure 'hooks' exists and is a hashtable-like object
+        if ($null -eq $Settings.hooks -or $Settings.hooks.GetType().Name -eq "Object[]") {
+            $Settings | Add-Member -MemberType NoteProperty -Name "hooks" -Value @{} -Force
+        }
 
-        if ($null -eq $Settings.hooks) { $Settings | Add-Member -MemberType NoteProperty -Name "hooks" -Value @() }
+        # Use a temporary hashtable to build the hooks structure
+        $HooksObj = @{}
+        # Preserve existing hooks from other events if any
+        foreach ($prop in $Settings.hooks.PSObject.Properties) {
+            $HooksObj[$prop.Name] = $prop.Value
+        }
 
-        $CurrentHooks = @($Settings.hooks)
-        $CleanHooks = $CurrentHooks | Where-Object { $_ -notlike "*$HookFileName" }
+        # Initialize or get UserPromptSubmit list
+        $EventHooks = if ($HooksObj.ContainsKey("UserPromptSubmit")) { @($HooksObj["UserPromptSubmit"]) } else { @() }
+        
+        $CleanEventHooks = New-Object System.Collections.Generic.List[PSObject]
+        foreach ($entry in $EventHooks) {
+            $isOurHook = $false
+            if ($null -ne $entry.hooks) {
+                foreach ($h in $entry.hooks) {
+                    if ($h.command -match [regex]::Escape($HookFileName)) { $isOurHook = $true; break }
+                }
+            }
+            if (-not $isOurHook) { $CleanEventHooks.Add($entry) }
+        }
 
         if ($Enable) {
-            $CleanHooks += $HookPath
-            Write-Host "[+] Registered hook in global settings.json: $HookFileName" -ForegroundColor Green
+            $NewHookEntry = @{
+                matcher = "*"
+                hooks = @(
+                    @{
+                        type = "command"
+                        command = $HookCommand
+                    }
+                )
+            }
+            $CleanEventHooks.Add($NewHookEntry)
+            Write-Host "[+] Registered hook (UserPromptSubmit) in global settings.json: $HookFileName" -ForegroundColor Green
         } else {
             Write-Host "[-] Unregistered hook from global settings.json: $HookFileName" -ForegroundColor Yellow
         }
 
-        $Settings.hooks = $CleanHooks
+        $HooksObj["UserPromptSubmit"] = $CleanEventHooks.ToArray()
+        $Settings.hooks = $HooksObj
+        
         $Settings | ConvertTo-Json -Depth 10 | Set-Content $GlobalClaudeSettings -Encoding UTF8
     } catch {
         Write-Warning "Failed to update global settings.json: $_"
