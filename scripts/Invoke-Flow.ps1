@@ -90,30 +90,27 @@ foreach ($Step in $SelectedFlow.steps) {
         switch ($Tool) {
             "gemini" {
                 if (-not (Get-Command gemini -ErrorAction SilentlyContinue)) { throw "Gemini CLI not found." }
-                # Using explicit string construction for the command to avoid argument splatting issues on Windows
-                $GeminiCmd = "gemini -p `"$($FinalPrompt -replace '"', '\"')`""
-                if ($Model) { $GeminiCmd += " --model $Model" }
-                if ($UseYolo) { $GeminiCmd += " --yolo" }
-                
-                # Use Invoke-Expression or direct call with string to ensure -p is respected
-                $Output = iex $GeminiCmd
+                $GeminiArgs = @('-p', $FinalPrompt)
+                if ($Model) { $GeminiArgs += @('--model', $Model) }
+                if ($UseYolo) { $GeminiArgs += '--yolo' }
+                $Output = & gemini @GeminiArgs
             }
             "claude" {
-                $ClaudeCmd = "claude -p `"$($FinalPrompt -replace '"', '\"')`""
-                if ($UseYolo) { $ClaudeCmd += " --dangerously-skip-permissions" }
-                $Output = iex $ClaudeCmd
+                $ClaudeArgs = @('-p', $FinalPrompt)
+                if ($UseYolo) { $ClaudeArgs += '--dangerously-skip-permissions' }
+                $Output = & claude @ClaudeArgs
             }
             "codex" {
                 if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
                     Write-Warning "Codex missing, falling back to Gemini..."
-                    $GeminiCmd = "gemini -p `"$($FinalPrompt -replace '"', '\"')`""
-                    if ($UseYolo) { $GeminiCmd += " --yolo" }
-                    $Output = iex $GeminiCmd
+                    $GeminiArgs = @('-p', $FinalPrompt)
+                    if ($UseYolo) { $GeminiArgs += '--yolo' }
+                    $Output = & gemini @GeminiArgs
                 } else {
-                    $CodexCmd = "codex run -p `"$($FinalPrompt -replace '"', '\"')`""
-                    if ($Model) { $CodexCmd += " --model $Model" }
-                    if ($UseYolo) { $CodexCmd += " --yolo" }
-                    $Output = iex $CodexCmd
+                    $CodexArgs = @('run', '-p', $FinalPrompt)
+                    if ($Model) { $CodexArgs += @('--model', $Model) }
+                    if ($UseYolo) { $CodexArgs += '--yolo' }
+                    $Output = & codex @CodexArgs
                 }
             }
             Default { Write-Warning "Unknown tool: $Tool" }
