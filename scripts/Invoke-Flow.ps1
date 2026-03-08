@@ -75,8 +75,7 @@ foreach ($Step in $SelectedFlow.steps) {
     # --- Planning Detection ---
     $IsPlanFile = $Task -match "\.md$" -and (Test-Path $Task)
     if ($IsPlanFile) {
-        $PlanContent = Get-Content $Task -Raw
-        $Task = "CRITICAL: You are in IMPLEMENTATION mode. Read the plan below carefully. Use `read_file` if needed, but the plan content is also provided here for convenience.`n`nPLAN FILE: $Task`nPLAN CONTENT:`n$PlanContent`n`nINSTRUCTION: Execute the plan step-by-step. Update the plan file by marking completed tasks with [x] using `replace`. DO NOT ask questions. Just implement."
+        $Task = "CRITICAL: You are in IMPLEMENTATION mode. Read and implement the plan located at: $Task`n`nINSTRUCTION: Execute the plan step-by-step. Update the plan file by marking completed tasks with [x] using `replace`. DO NOT ask questions. Just implement."
     }
 
     $CleanContext = Sanitize-Prompt -RawContent $Context
@@ -85,16 +84,18 @@ foreach ($Step in $SelectedFlow.steps) {
     $Output = ""
     $OldEAP = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    
+
     try {
         switch ($Tool) {
             "gemini" {
                 if (-not (Get-Command gemini -ErrorAction SilentlyContinue)) { throw "Gemini CLI not found." }
+                $env:CI = "true" # Disable PTY / Interactive mode
                 $GeminiArgs = @()
                 if ($Model) { $GeminiArgs += @('--model', $Model) }
                 if ($UseYolo) { $GeminiArgs += '--yolo' }
-                $Output = & gemini -p "$FinalPrompt" @GeminiArgs
+                $Output = & gemini "$FinalPrompt" @GeminiArgs
             }
+
             "claude" {
                 $ClaudeArgs = @('-p', $FinalPrompt)
                 if ($UseYolo) { $ClaudeArgs += '--dangerously-skip-permissions' }

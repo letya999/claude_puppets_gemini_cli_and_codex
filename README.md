@@ -1,209 +1,88 @@
-# Claude Planner/Dispatcher — PowerShell Pipeline
+# Claude Puppets: Gemini CLI & Codex Orchestrator
 
-A native Windows PowerShell system that transforms Claude Code into a **Planner/Dispatcher** that delegates tasks to external CLI tools (Gemini CLI, Codex CLI, Mods).
+<p align="center">
+  <img src="image.png" alt="Claude Puppets Orchestration" width="800">
+</p>
 
-No LangChain, no WSL2, no external frameworks — just PowerShell and CLI tools.
+## Overview
+
+**Claude Puppets** is a sophisticated orchestration framework that empowers **Claude Code** to act as a "master puppeteer," delegating complex, long-running, or resource-intensive tasks to specialized CLI tools and AI models. By leveraging **Gemini CLI** for massive context processing and **Codex** for deep code analysis, this system achieves a level of automation and power beyond any single model.
 
 ---
 
-## Global Install (Recommended)
+## 🚀 Key Features
 
-Clone once into `~/.claude` — works in every project automatically:
+- **Master Orchestrator (Claude Code)**: Intelligent task decomposition and workflow management.
+- **Gemini Delegation**: Seamlessly offload tasks to Google's Gemini API for 2M+ token context and lightning-fast processing.
+- **Codex-Powered Review**: Automated, high-fidelity code reviews and security audits.
+- **Advanced Planning**: Built-in multi-step planner for complex architectural and implementation tasks.
+- **MCP Native**: Integrates with the Model Context Protocol (MCP) for extensible toolsets.
+- **Role-Based Expertise**: A comprehensive library of specialized agent roles (Coder, Researcher, Reviewer, etc.).
 
-```powershell
-# 1. Backup existing ~/.claude if it has custom settings
-#    (Install.ps1 will ask before overwriting settings.json)
+---
 
-# 2. Clone repo as your ~/.claude directory
-git clone https://github.com/your-org/claude-dispatcher $env:USERPROFILE\.claude
+## 🛠️ Project Structure
 
-# 3. Run one-time setup (generates settings.json with absolute paths)
-powershell $env:USERPROFILE\.claude\Install.ps1
+- `agents/` & `roles/`: Specialized persona definitions for task-specific AI behaviors.
+- `skills/`: Core logic for task delegation:
+    - `planner`: Orchestrates multi-step workflows.
+    - `gemini-delegate`: Delegates tasks to Gemini CLI.
+    - `codex-review`: Automated code review via Codex.
+- `mcp/`: Extensible Model Context Protocol server for custom tool integration.
+- `scripts/`: PowerShell-based automation for local environment management.
+    - `Invoke-GeminiDelegate.ps1`: Core delegation logic for Gemini.
+    - `Invoke-CodexDelegate.ps1`: Core delegation logic for Codex.
+    - `Invoke-Flow.ps1`: Executes automated task sequences.
+- `flow.config.json`: Declarative workflow definitions.
 
-# 4. (Optional) Add scripts to PATH for shorter syntax
-powershell $env:USERPROFILE\.claude\Install.ps1 -AddToPath
-```
+---
 
-That's it. Now `claude` in any project folder will automatically use the dispatcher.
+## ⚡ Quick Start
 
-### What Install.ps1 does
+1.  **Installation**: Run the setup script to initialize the orchestration environment:
+    ```powershell
+    .\Install-Dispatcher.ps1
+    ```
+2.  **Configuration**: Refer to `SETUP.md` to configure your API keys (Anthropic, Google Gemini, etc.) and environment variables.
+3.  **Deployment**: Launch the main dispatcher to begin orchestrating tasks:
+    ```powershell
+    .\Start-Dispatcher.ps1
+    ```
 
-- Generates `~/.claude/settings.json` with **absolute paths** to hooks
-- Validates that all required files exist
-- Optionally adds `~/.claude/scripts/` to Windows PATH
+---
 
-### Per-project config override
+## 📖 Documentation
 
-To use a different agent chain for a specific project:
-
-```powershell
-# Create a local override in your project
-mkdir .claude
-Copy-Item $env:USERPROFILE\.claude\dispatcher.config.json .claude\dispatcher.config.json
-# Edit .claude\dispatcher.config.json to customize the chain
-```
-
-The hooks automatically prefer local `.claude\dispatcher.config.json` over the global one.
+- `CLAUDE.md`: Detailed usage guide and instructions for Claude Code.
+- `SETUP.md`: Comprehensive environment setup and prerequisites.
+- `FUTURE_IDEAS.md`: Roadmap and upcoming capabilities for the puppeteer system.
 
 ---
 
 ## Architecture
 
-```
-[You] --task--> [Claude Code: Planner]
-                      |
-          +-----------+-----------+
-          |           |           |
-    [Gemini CLI]  [Codex CLI]  [Mods CLI]
-    (research)   (implement)   (review)
-          |           |           |
-          +-----------+-----------+
-                      |
-               [Claude Code: Edit tool]
-                      |
-               [Final file changes]
+```mermaid
+graph TD
+    A[User] --> B[Claude Code: Master]
+    B --> C{Planner}
+    C --> D[Gemini CLI]
+    C --> E[Codex CLI]
+    D --> F[Research/Context Analysis]
+    E --> G[Code Generation/Review]
+    F --> B
+    G --> B
+    B --> H[Apply Changes]
 ```
 
 ### Role Assignments
 
-| Role | Tool | Use When |
+| Role | Tool | Use Case |
 |------|------|----------|
 | **Planner** | Claude Code | Always — decomposes tasks, routes, applies final changes |
-| **Researcher / Large Context** | Gemini CLI | >50k tokens, logs, analysis, creative ideation |
-| **Code Implementer** | Codex CLI | Precise code generation, algorithms, Python |
-| **Reviewer / Corrector** | Mods CLI | Code review, security audit, bug fixing |
+| **Researcher** | Gemini CLI | High context (>200k tokens), documentation, creative ideation |
+| **Code Implementer** | Codex CLI | Precise code generation, algorithms, refactoring |
+| **Reviewer** | Codex CLI | Code review, security audit, bug identification |
 
 ---
 
-## Prerequisites
-
-### Install CLI Tools
-
-```powershell
-# Gemini CLI (Google)
-npm install -g @google/generative-ai-cli
-
-# Codex CLI (OpenAI)
-npm install -g @openai/codex
-
-# Mods (charmbracelet)
-winget install charmbracelet.mods
-```
-
-### Set API Keys
-
-```powershell
-# One-time setup (interactive, with optional persistence)
-powershell $env:USERPROFILE\.claude\scripts\Set-DispatcherEnv.ps1 -Persist
-
-# Or set manually for current session
-$env:GEMINI_API_KEY = "AIza..."
-$env:OPENAI_API_KEY = "sk-..."
-```
-
-### Verify Installation
-
-```powershell
-powershell $env:USERPROFILE\.claude\scripts\Test-Tools.ps1
-```
-
----
-
-## Usage
-
-### Run the full chain (from any project)
-
-```powershell
-powershell "$env:USERPROFILE\.claude\scripts\Invoke-Chain.ps1" -Task "Create a FastAPI endpoint for user registration"
-```
-
-### Manual step-by-step
-
-```powershell
-$scripts = "$env:USERPROFILE\.claude\scripts"
-
-# Research
-powershell "$scripts\Run-Agent.ps1" -Model gemini-2.5-pro -Role researcher -Prompt "best practices for rate limiting"
-
-# Implement
-powershell "$scripts\Run-Agent.ps1" -Model gpt-5.3-codex -Role implementer -Yolo -Prompt "implement rate limiting"
-
-# Review
-powershell "$scripts\Run-Agent.ps1" -Model gemini-2.5-pro -Role reviewer -Prompt "review the implementation"
-```
-
-### Claude Code slash commands (in chat)
-
-```
-/dispatch <task>   — auto-route to best tool
-/gemini <task>     — delegate to Gemini CLI
-/codex <task>      — delegate to Codex CLI
-/review <file>     — code review via Mods
-/pipeline <task>   — full pipeline
-/tools             — check tool availability
-```
-
----
-
-## File Structure
-
-When installed globally, the repo becomes your `~/.claude/`:
-
-```
-~/.claude/
-├── CLAUDE.md                    # Global dispatcher rules (read by Claude in every project)
-├── Install.ps1                  # One-time setup script
-├── settings.json                # Generated by Install.ps1 (gitignored — has absolute paths)
-├── settings.json.template       # Template stored in git
-├── dispatcher.config.json       # Default agent chain
-├── hooks/
-│   ├── on-prompt.ps1            # Injects dispatcher instructions before every Claude response
-│   └── pre-bash.ps1             # Warns when Claude tries to write code directly
-├── scripts/
-│   ├── Invoke-Chain.ps1         # Run the full agent chain
-│   ├── Run-Agent.ps1            # Run a single agent step
-│   ├── Invoke-Pipeline.ps1      # Full orchestration pipeline
-│   ├── Test-Tools.ps1           # Check tool availability
-│   ├── Set-DispatcherEnv.ps1    # Configure API keys
-│   └── agents/                  # Per-agent runner scripts
-├── roles/                       # Agent role definitions (markdown)
-├── agents/                      # Claude Code native agent profiles
-├── commands/                    # Slash command definitions
-└── skills/                      # On-demand skill definitions
-```
-
----
-
-## Error Handling
-
-All scripts implement:
-- **Retry with exponential backoff** for API failures
-- **Fallback routing** (Gemini fails → try Codex; defined in dispatcher.config.json)
-- **Session logging** to `$env:TEMP\chain-<timestamp>\`
-
-Common fixes:
-
-```powershell
-# "gemini not found"
-npm install -g @google/generative-ai-cli
-
-# "API key not set"
-$env:GEMINI_API_KEY = "AIza..."
-# OR:
-powershell $env:USERPROFILE\.claude\scripts\Set-DispatcherEnv.ps1 -Persist
-
-# "Access denied running .ps1"
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-```
-
----
-
-## Design Principles
-
-1. **Claude = Planner only** — never implements code directly when delegation is possible
-2. **Global config, local override** — `~/.claude/` is default, project `.claude/` overrides
-3. **Token efficiency** — skills loaded on-demand, intermediate results cached to disk
-4. **Windows-native** — `$env:TEMP` not `/tmp/`, no bash/WSL2
-5. **Graceful degradation** — if a tool fails, fallback defined in config
-6. **Auditability** — every step's input/output saved to timestamped session directory
-
+*This project bridges the gap between different AI ecosystems, providing a unified "brain" for complex development workflows.*
