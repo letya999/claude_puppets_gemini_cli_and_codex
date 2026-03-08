@@ -1,5 +1,5 @@
 {
-  "mode": "local",
+  "mode": "global",
   "activeFormat": "directives",
   "version": "2.0.0",
   "windowsVersion": "11",
@@ -18,15 +18,15 @@
       "description": "Инструкции в CLAUDE.md для управления Claude Code"
     },
     "hooks": {
-      "enabled": true,
+      "enabled": false,
       "description": "Автоматические хуки на ввод пользователя (только Global)"
     },
     "skills": {
-      "enabled": true,
+      "enabled": false,
       "description": "Интеграция кастомных JavaScript навыков"
     },
     "subagents": {
-      "enabled": true,
+      "enabled": false,
       "description": "Использование профилей агентов (researcher, coder и т.д.)"
     }
   }
