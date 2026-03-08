@@ -1,0 +1,33 @@
+{
+  "mode": "local",
+  "activeFormat": "directives",
+  "version": "2.0.0",
+  "windowsVersion": "11",
+  "powershellCompatibility": [
+    "5.1",
+    "7.1",
+    "7.4"
+  ],
+  "paths": {
+    "globalBase": "~/.claude",
+    "localBase": ".claude"
+  },
+  "formats": {
+    "directives": {
+      "enabled": true,
+      "description": "Инструкции в CLAUDE.md для управления Claude Code"
+    },
+    "hooks": {
+      "enabled": true,
+      "description": "Автоматические хуки на ввод пользователя (только Global)"
+    },
+    "skills": {
+      "enabled": true,
+      "description": "Интеграция кастомных JavaScript навыков"
+    },
+    "subagents": {
+      "enabled": true,
+      "description": "Использование профилей агентов (researcher, coder и т.д.)"
+    }
+  }
+}

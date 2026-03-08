@@ -1,0 +1,46 @@
+{
+  "defaultFlow": "claude_chain",
+  "flows": {
+    "standard": {
+      "steps": [
+        {
+          "name": "research",
+          "tool": "gemini",
+          "model": "gemini-2.5-pro",
+          "role": "researcher"
+        },
+        {
+          "name": "implement",
+          "tool": "codex",
+          "model": "gpt-4-codex",
+          "role": "implementer",
+          "yolo": true
+        }
+      ]
+    },
+    "claude_chain": {
+      "steps": [
+        {
+          "name": "execute",
+          "tool": "gemini",
+          "role": "implementer",
+          "yolo": true
+        }
+      ]
+    }
+  },
+  "tools": {
+    "gemini": {
+      "executable": "gemini"
+    },
+    "claude": {
+      "executable": "claude"
+    },
+    "codex": {
+      "executable": "codex"
+    },
+    "mcp": {
+      "type": "bridge"
+    }
+  }
+}

@@ -1,0 +1,313 @@
+ Убедись что мсп сервер реализован корректно. если не хватает тулов допиши их и покрой его автотестами
+
+● Searched for 2 patterns, read 5 files (ctrl+o to expand)
+
+● Bash(node --version && cd C:/Users/User/a_projects/claude_puppets_gemini_cli_and_codex/mcp && node -e "import('./server.js').catch(e =>
+      console.log('Import error:',…)
+  ⎿  v22.14.0
+     orchestrator-mcp ready
+
+● Now I have a full picture. Let me analyze the issues:
+
+  Bugs found in server.js:
+  1. CONFIG_PATH → dispatcher.config.json (deleted in git). get_config and switch_preset will throw file-not-found.
+  2. handleGetConfig reads cfg.chain — that field doesn't exist in flow.config.json (which has flows).
+  3. handleSwitchPreset reads cfg._presets — doesn't exist either; new config has flows.
+  4. switch_preset enum has stale preset names unrelated to flow.config.json.
+
+  Missing tools:
+  - list_flows — expose available flows from flow.config.json
+  - set_default_flow — replace switch_preset for new config structure
+  - get_run_output — read output for a specific run (not just latest report)
+
+  No tests at all.
+
+  Plan: extract handler logic to mcp/lib/handlers.js (dependency injection for testability), fix server.js, write mcp/server.test.js with Node's built-in
+  test runner.
+
+  ★ Insight ─────────────────────────────────────
+  - MCP handlers mixing business logic with module-level globals makes them untestable.
+    The "makeHandlers(deps)" factory pattern lets tests inject mock filesystem/spawn.
+  - node:test (Node 18+) + node:assert is zero-install: no jest/vitest needed for ESM
+    projects. Use `--experimental-vm-modules` only if you need module-level mocking.
+  - Keeping handlers.js free of top-level await means it's safe to import from tests
+    without starting the MCP server transport.
+  ─────────────────────────────────────────────────
+
+● Bash(mkdir -p C:/Users/User/a_projects/claude_puppets_gemini_cli_and_codex/mcp/lib)
+  ⎿  Done
+
+● Write(lib\handlers.js)
+  ⎿  PreToolUse:Write hook error
+  ⎿  Wrote 141 lines to lib\handlers.js
+       1 import { readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
+       2 import { join } from 'path';
+       3
+       4 // ── Pure config helpers ───────────────────────────────────────────────────────
+       5
+       6 function readFlowConfig(flowConfigPath) {
+       7   return JSON.parse(readFileSync(flowConfigPath, 'utf8'));
+       8 }
+       9
+      10 function writeFlowConfig(cfg, flowConfigPath) {
+     … +131 lines (ctrl+o to expand)
+
+● Now update server.js to import from the handlers module and fix all the config/tool issues:
+
+● Write(server.js)
+
+
+
+● Search(pattern: "**/*.{test,spec}.{js,mjs,ts}", path: "~\a_projects\claude_puppets_gemini_cli_and_codex")
+  ⎿  Found 100 files (ctrl+o to expand)
+
+● Search(pattern: "package.json", path: "~\a_projects\claude_puppets_gemini_cli_and_codex")
+  ⎿  Found 100 files (ctrl+o to expand)
+
+● Read(~\a_projects\claude_puppets_gemini_cli_and_codex\scripts\Invoke-Flow.ps1)
+  ⎿  Read 115 lines
+
+● Bash(ls "C:\Users\User\a_projects\claude_puppets_gemini_cli_and_codex\mcp\")
+
+● Bash(ls C:/Users/User/a_projects/claude_puppets_gemini_cli_and_codex/mcp/)
+  ⎿  README.md
+     node_modules
+     package-lock.json
+     … +2 lines (ctrl+o to expand)
+
+● Bash(ls C:/Users/User/a_projects/claude_puppets_gemini_cli_and_codex/roles/ 2>/dev/null || echo "no local roles dir"; ls C:/Users/User/.claude/roles/
+      2>/dev/null ||…)
+  ⎿  implementation-planner.md
+     implementer.md
+     researcher.md
+     … +7 lines (ctrl+o to expand)
+
+● Bash(node --version && cd C:/Users/User/a_projects/claude_puppets_gemini_cli_and_codex/mcp && node -e "import('./server.js').catch(e =>
+      console.log('Import error:', e.message))" 2>&1 | head -20)
+  ⎿  v22.14.0
+     orchestrator-mcp ready
+
+∴ Thinking…
+
+  Good. The server starts fine. Now I understand the full picture:
+
+  Issues to fix:
+  1. CONFIG_PATH points to deleted dispatcher.config.json - get_config and switch_preset will fail with file not found errors
+  2. handleGetConfig uses cfg.chain structure which doesn't exist in new flow.config.json
+  3. handleSwitchPreset uses cfg._presets which doesn't exist in new flow.config.json
+  4. switch_preset enum has old preset names that don't match flow.config.json
+
+  5. There are no tests
+
+  So my plan is to update CONFIG_PATH to point to the new config file, refactor the handlers to work with the new structure where defaultFlow replaces the
+  preset system, rename or rework the preset tool to set flows instead, and add a tool to list available flows. I should also extract the handler logic into
+   its own module to make everything more testable.
+
+  Now I'm thinking about whether to follow the orchestrator pattern from CLAUDE.md, but this is infrastructure work on the MCP server itself rather than a
+  regular project task. Since Gemini can't write files and I need to make precise changes to the toolchain, I'll handle this directly.
+
+  I'm designing the handlers to be pure functions that accept configuration paths as parameters, making them testable with temporary directories.
+
+  Writing handler functions... Writing test suite and handlers... I'm realizing I need to split the code into separate files to avoid starting the server
+  during tests — handlers.js for the pure logic and server.js for the MCP setup. Let me start writing out the handlers file with the config reading and
+  writing functions.
+
+  Writing handler functions... I'm reading the most recent agent run report from the orchestrate directory, checking the runs folder and sorting by
+  modification time to find the latest one, then returning its report.md file or an error message if it doesn't exist. Now I'm moving on to list all runs by
+   reading from a runs index file.
+
+  Reading the runs index file and parsing each line as JSON, then returning the most recent entries up to a specified limit, defaulting to the last 10 runs.
+   For retrieving a specific run's output, I'm looking up the run directory by ID and reading its contents. I'm going to keep get_config for backward
+  compatibility with Claude's memory, but swap out switch_preset for set_default_flow. Now I need to set up the actual implementation: creating the handlers
+   module, updating the server file, writing tests using Node's built-in test framework with real file system operations, and adding the test script to
+  package.json.
+
+  For the handlers that spawn PowerShell processes, I'll use dependency injection to pass in the runPowershell function, making it testable without actually
+   invoking external processes. I'm structuring the handlers as a factory function that takes configuration like the flow config path and orchestrate
+  directory, then returns an object with all the handler methods that can use those injected dependencies.
+
+  Writing handler factory... Now I'm planning out the test cases for the remaining handler functions—checking edge cases like missing directories, empty
+  runs, and successful operations. I also need to make sure the flow and agent handlers properly delegate to the PowerShell runner with the correct
+  arguments. For the tools themselves, I'm renaming switch_preset to set_default_flow and updating get_config to read from the new flow.config.json format
+  instead of the old dispatcher config.
+
+                                                                                                                          01:06 PM claude-sonnet-4-6
+● Now I have a full picture. Let me analyze the issues:
+
+  Bugs found in server.js:
+  1. CONFIG_PATH → dispatcher.config.json (deleted in git). get_config and switch_preset will throw file-not-found.
+  2. handleGetConfig reads cfg.chain — that field doesn't exist in flow.config.json (which has flows).
+  3. handleSwitchPreset reads cfg._presets — doesn't exist either; new config has flows.
+  4. switch_preset enum has stale preset names unrelated to flow.config.json.
+
+  Missing tools:
+  - list_flows — expose available flows from flow.config.json
+  - set_default_flow — replace switch_preset for new config structure
+  - get_run_output — read output for a specific run (not just latest report)
+
+  No tests at all.
+
+  Plan: extract handler logic to mcp/lib/handlers.js (dependency injection for testability), fix server.js, write mcp/server.test.js with Node's built-in
+  test runner.
+
+  ★ Insight ─────────────────────────────────────
+  - MCP handlers mixing business logic with module-level globals makes them untestable.
+    The "makeHandlers(deps)" factory pattern lets tests inject mock filesystem/spawn.
+  - node:test (Node 18+) + node:assert is zero-install: no jest/vitest needed for ESM
+    projects. Use `--experimental-vm-modules` only if you need module-level mocking.
+  - Keeping handlers.js free of top-level await means it's safe to import from tests
+    without starting the MCP server transport.
+  ─────────────────────────────────────────────────
+
+● Bash(mkdir -p C:/Users/User/a_projects/claude_puppets_gemini_cli_and_codex/mcp/lib)
+  ⎿  Done
+
+● Write(C:\Users\User\a_projects\claude_puppets_gemini_cli_and_codex\mcp\lib\handlers.js)
+  ⎿  PreToolUse:Write hook error
+  ⎿  Wrote 141 lines to C:\Users\User\a_projects\claude_puppets_gemini_cli_and_codex\mcp\lib\handlers.js
+        1 import { readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
+        2 import { join } from 'path';
+        3
+        4 // ── Pure config helpers ───────────────────────────────────────────────────────
+        5
+        6 function readFlowConfig(flowConfigPath) {
+        7   return JSON.parse(readFileSync(flowConfigPath, 'utf8'));
+        8 }
+        9
+       10 function writeFlowConfig(cfg, flowConfigPath) {
+       11   writeFileSync(flowConfigPath, JSON.stringify(cfg, null, 2), 'utf8');
+       12 }
+       13
+       14 // ── Handler implementations ───────────────────────────────────────────────────
+       15
+       16 function getConfig(flowConfigPath) {
+       17   const cfg = readFlowConfig(flowConfigPath);
+       18   return `Default flow: ${cfg.defaultFlow}\n\n${JSON.stringify(cfg, null, 2)}`;
+       19 }
+       20
+       21 function listFlows(flowConfigPath) {
+       22   const cfg = readFlowConfig(flowConfigPath);
+       23   const names = Object.keys(cfg.flows);
+       24   if (!names.length) return 'No flows defined in flow.config.json.';
+       25   const lines = names.map(name => {
+       26     const steps = cfg.flows[name].steps.map(s => `${s.tool}:${s.role}`).join(' → ');
+       27     const marker = name === cfg.defaultFlow ? ' [default]' : '';
+       28     return `  ${name}${marker}: ${steps}`;
+       29   });
+       30   return `Available flows (default: ${cfg.defaultFlow}):\n${lines.join('\n')}`;
+       31 }
+       32
+       33 function setDefaultFlow(args, flowConfigPath) {
+       34   const cfg = readFlowConfig(flowConfigPath);
+       35   const { flow } = args;
+       36   if (!cfg.flows[flow]) {
+       37     const available = Object.keys(cfg.flows).join(', ');
+       38     throw new Error(`Unknown flow: "${flow}". Available: ${available}`);
+       39   }
+       40   cfg.defaultFlow = flow;
+       41   writeFlowConfig(cfg, flowConfigPath);
+       42   return `Default flow set to "${flow}"`;
+       43 }
+       44
+       45 function readReport(orchestrateDir) {
+       46   const runsDir = join(orchestrateDir, 'runs', 'agent-runs');
+       47   let dirs;
+       48   try {
+       49     dirs = readdirSync(runsDir);
+       50   } catch {
+       51     return 'No runs directory found (.orchestrate/runs/agent-runs/).';
+       52   }
+       53   if (!dirs.length) return 'No agent runs found.';
+       54
+       55   const sorted = dirs
+       56     .map(d => ({ name: d, mtime: statSync(join(runsDir, d)).mtime }))
+       57     .sort((a, b) => b.mtime - a.mtime);
+       58
+       59   const reportPath = join(runsDir, sorted[0].name, 'report.md');
+       60   try {
+       61     return readFileSync(reportPath, 'utf8');
+       62   } catch {
+       63     return `Run found (${sorted[0].name}) but no report.md inside.`;
+       64   }
+       65 }
+       66
+       67 function listRuns(args, orchestrateDir) {
+       68   const indexPath = join(orchestrateDir, 'index', 'runs.jsonl');
+       69   let content;
+       70   try {
+       71     content = readFileSync(indexPath, 'utf8');
+       72   } catch {
+       73     return 'Run index not found. No runs recorded yet.';
+       74   }
+       75   const limit = args?.limit ?? 10;
+       76   const lines = content.trim().split('\n').filter(Boolean);
+       77   const recent = lines.slice(-limit);
+       78   const parsed = recent.map(l => { try { return JSON.parse(l); } catch { return l; } });
+       79   return JSON.stringify(parsed, null, 2);
+       80 }
+       81
+       82 function getRunOutput(args, orchestrateDir) {
+       83   const runsDir = join(orchestrateDir, 'runs', 'agent-runs');
+       84   const runId = args?.run_id;
+       85   let dirs;
+       86   try {
+       87     dirs = readdirSync(runsDir);
+       88   } catch {
+       89     return 'No runs directory found (.orchestrate/runs/agent-runs/).';
+       90   }
+       91   if (!dirs.length) return 'No agent runs found.';
+       92
+       93   let match;
+       94   if (runId) {
+       95     match = dirs.find(d => d === runId || d.includes(runId));
+       96     if (!match) return `Run not found: "${runId}"`;
+       97   } else {
+       98     match = dirs
+       99       .map(d => ({ name: d, mtime: statSync(join(runsDir, d)).mtime }))
+      100       .sort((a, b) => b.mtime - a.mtime)[0]?.name;
+      101   }
+      102
+      103   // Try output.txt first, fall back to report.md
+      104   for (const file of ['output.txt', 'report.md']) {
+      105     try {
+      106       return readFileSync(join(runsDir, match, file), 'utf8');
+      107     } catch { /* try next */ }
+      108   }
+      109   return `Run found (${match}) but no output file inside.`;
+      110 }
+      111
+      112 // ── Factory — injects dependencies for testability ───────────────────────────
+      113
+      114 export function makeHandlers({ flowConfigPath, orchestrateDir, runPowershell }) {
+      115   return {
+      116     async flow(args) {
+      117       const params = ['-Task', args.task];
+      118       // use explicit flow or fall back to defaultFlow from config
+      119       const flowName = args.flow ?? readFlowConfig(flowConfigPath).defaultFlow;
+      120       params.push('-Flow', flowName);
+      121       if (args.yolo) params.push('-Yolo');
+      122       const out = await runPowershell(params);
+      123       return out || '(flow complete — no stdout output)';
+      124     },
+      125
+      126     async runAgent(args) {
+      127       const params = ['-Model', args.model, '-Role', args.role, '-Prompt', args.prompt];
+      128       if (args.yolo)    params.push('-Yolo');
+      129       if (args.session) params.push('-Session', args.session);
+      130       const out = await runPowershell(params, 'Run-Agent.ps1');
+      131       return out || '(agent complete — no stdout output)';
+      132     },
+      133
+      134     getConfig()            { return getConfig(flowConfigPath); },
+      135     listFlows()            { return listFlows(flowConfigPath); },
+      136     setDefaultFlow(args)   { return setDefaultFlow(args, flowConfigPath); },
+      137     readReport()           { return readReport(orchestrateDir); },
+      138     listRuns(args)         { return listRuns(args, orchestrateDir); },
+      139     getRunOutput(args)     { return getRunOutput(args, orchestrateDir); },
+      140   };
+      141 }
+  ⎿  1 PostToolUse hook ran
+
+                                                                                                                          01:06 PM claude-sonnet-4-6
+● Now update server.js to import from the handlers module and fix all the config/tool issues:
+
