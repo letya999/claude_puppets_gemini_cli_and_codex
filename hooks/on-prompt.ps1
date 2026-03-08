@@ -11,102 +11,55 @@
     Works from ~/.claude/hooks/ (global install) and from .claude/hooks/ (local project).
 #>
 
-# ── Resolve config path: local project wins, then global profile ──
+# ── Resolve config path ──
 $globalDir        = Split-Path $PSScriptRoot -Parent
-$globalConfigPath = Join-Path $globalDir "dispatcher.config.json"
 $localConfigPath  = Join-Path $PWD ".claude\dispatcher.config.json"
+$globalConfigPath = Join-Path $globalDir "dispatcher.config.json"
 
-if (Test-Path $localConfigPath) {
-    $configPath = $localConfigPath
-} elseif (Test-Path $globalConfigPath) {
-    $configPath = $globalConfigPath
-} else {
-    $configPath = ""
-}
+if (Test-Path $localConfigPath) { $configPath = $localConfigPath }
+elseif (Test-Path $globalConfigPath) { $configPath = $globalConfigPath }
+else { $configPath = "" }
 
-# ── Absolute path to Invoke-Chain.ps1 (sibling scripts/ folder) ──
-$invokeChain = Join-Path $globalDir "scripts\Invoke-Chain.ps1"
-
-$chain = @()
-$chainStr = "gemini (default)"
-
-try {
-    if ($configPath -and (Test-Path $configPath)) {
-        $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($config.chain) {
-            $parts = @()
-            foreach ($step in $config.chain) {
-                if ($step.agent -and $step.role) {
-                    $parts += "$($step.agent):$($step.role)"
-                } elseif ($step -is [string]) {
-                    $parts += $step
-                }
-            }
-            $chainStr = $parts -join " -> "
-        }
-    }
-} catch { }
-
-# ── Read user prompt from stdin (Claude Code passes it as JSON) ──
-$prompt = ""
-try {
-    $raw = [Console]::In.ReadToEnd()
-    if ($raw.Trim()) {
-        $parsed = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue
-        if ($parsed) {
-            # PS 5.1 compatible: no ?? or ?. operators
-            if ($parsed.prompt)  { $prompt = $parsed.prompt }
-            elseif ($parsed.message) { $prompt = $parsed.message }
-            elseif ($parsed.content) { $prompt = $parsed.content }
-        }
-    }
-} catch { }
-
-if (-not $prompt -and $env:CLAUDE_USER_PROMPT) {
-    $prompt = $env:CLAUDE_USER_PROMPT
+# ── Absolute path to Invoke-Flow.ps1 (the new universal executor) ──
+$invokeFlow = Join-Path $PWD "scripts\Invoke-Flow.ps1"
+if (-not (Test-Path $invokeFlow)) {
+    $invokeFlow = Join-Path $globalDir "scripts\Invoke-Flow.ps1"
 }
 
 # ── Detect simple questions — skip chain for those ────────────
+$raw = ""
+try { $raw = [Console]::In.ReadToEnd() } catch { }
+$prompt = ""
+if ($raw.Trim()) {
+    $parsed = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue
+    if ($parsed.prompt) { $prompt = $parsed.prompt }
+    elseif ($parsed.message) { $prompt = $parsed.message }
+}
+if (-not $prompt -and $env:CLAUDE_USER_PROMPT) { $prompt = $env:CLAUDE_USER_PROMPT }
+
 $isSimpleQuestion = $false
-$questionPatterns = @(
-    '^\s*что такое ', '^\s*what is ', '^\s*как работает ', '^\s*how does ',
-    '^\s*объясни ', '^\s*explain ', '^\s*почему ', '^\s*why ',
-    '^\s*привет', '^\s*hello', '^\s*hi ', '^\s*помоги понять',
-    '^\s*покажи ', '^\s*show me '
-)
+$questionPatterns = @('^\s*что такое ', '^\s*what is ', '^\s*как работает ', '^\s*how does ', '^\s*объясни ', '^\s*explain ', '^\s*почему ', '^\s*why ', '^\s*привет', '^\s*hello', '^\s*hi ')
 $promptLower = $prompt.ToLower()
-
-foreach ($p in $questionPatterns) {
-    if ($promptLower -match $p) { $isSimpleQuestion = $true; break }
-}
-
-# Short prompts without action verbs are likely questions
-$actionVerbs = 'напиши|реализуй|сделай|создай|implement|write|build|create|fix|review|analyze|рефактор|добавь|add|generate|запусти'
-if ($prompt.Length -lt 60 -and $promptLower -notmatch $actionVerbs) {
-    $isSimpleQuestion = $true
-}
+foreach ($p in $questionPatterns) { if ($promptLower -match $p) { $isSimpleQuestion = $true; break } }
 
 # ── Output mandatory instruction ───────────────────────────────
-if (-not $isSimpleQuestion) {
+if (-not $isSimpleQuestion -and $prompt.Length -gt 10) {
     $instruction = @"
 
 ================================================================================
-  DISPATCHER - MANDATORY INSTRUCTION
+  DISPATCHER - MANDATORY DELEGATION RULES
 ================================================================================
-Active chain: $chainStr
+YOU ARE STRICTLY PROHIBITED FROM DIRECT FILE EDITING (write_file, edit_file, replace).
+You MUST delegate all implementation tasks to Gemini/Codex via the Flow Executor.
 
-YOU MUST perform exactly TWO steps:
+STEP 1 - Write a detailed PLAN:
+  - Describe what files will be created or modified.
+  - Specify the flow name from flow.config.json (e.g., 'standard' or 'claude_chain').
 
-STEP 1 - Write a PLAN (5-10 lines):
-  ## PLAN
-  Task: [brief description]
-  Chain: $chainStr
-  Steps: [list each agent:role and what it will do]
+STEP 2 - Execute the task IMMEDIATELY:
+  powershell -NoProfile -ExecutionPolicy Bypass -File "$invokeFlow" -Task "Your detailed task description" -Flow "standard"
 
-STEP 2 - Run the chain IMMEDIATELY (no questions, no waiting):
-  powershell -NoProfile -File "$invokeChain" -Task "[user task verbatim]"
-
-DO NOT WRITE CODE. DO NOT ASK PERMISSION. EXECUTE THE CHAIN NOW.
+DO NOT WRITE CODE YOURSELF. WAIT FOR DISPATCHER RESULTS.
 ================================================================================
 
 "@

@@ -53,9 +53,10 @@ $prompt | gemini --model gemini-2.5-pro
 ```
 
 ## OUTPUT HANDLING
-- Output is saved to `$env:TEMP\dispatcher-session-<timestamp>\gemini-output.txt`
-- Claude should read this file and decide what changes to apply
-- Use the Edit tool to apply the actual file modifications
+- Gemini CLI operates autonomously using its own file system tools.
+- Gemini will directly apply file modifications to the codebase based on the task.
+- Claude should wait for the command to complete, read the output or check the git diff/files to verify what Gemini has done.
+- Do NOT manually apply changes that Gemini was supposed to make.
 
 ## ROUTING RULES
 - If task needs CODE implementation after research → chain to `Invoke-CodexDelegate.ps1`
