@@ -1,5 +1,5 @@
 ﻿{
-    "mode":  "local",
+    "mode":  "global",
     "activeFormat":  "directives",
     "version":  "2.0.0",
     "windowsVersion":  "11",
@@ -14,11 +14,11 @@
               },
     "formats":  {
                     "directives":  {
-                                       "enabled":  true,
+                                       "enabled":  false,
                                        "description":  "РРЅСЃС‚СЂСѓРєС†РёРё РІ CLAUDE.md РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ Claude Code"
                                    },
                     "hooks":  {
-                                  "enabled":  false,
+                                  "enabled":  true,
                                   "description":  "РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРёРµ С…СѓРєРё РЅР° РІРІРѕРґ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (С‚РѕР»СЊРєРѕ Global)"
                               },
                     "skills":  {

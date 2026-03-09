@@ -185,13 +185,25 @@ switch ($Mode) {
         $hookPath = if ($Scope -eq "Global") { Join-Path $GlobalClaudeDir "hooks\on-prompt.ps1" } else { Join-Path $ProjectRoot ".claude\hooks\on-prompt.ps1" }
         
         $json = Get-Content $GlobalSettingsJson -Raw -Encoding UTF8 | ConvertFrom-Json
+        
+        # Ensure hooks structure exists
+        if ($null -eq $json.hooks) { 
+            $json | Add-Member -MemberType NoteProperty -Name "hooks" -Value (New-Object PSObject)
+        }
+        if ($null -eq $json.hooks.UserPromptSubmit) {
+            $json.hooks | Add-Member -MemberType NoteProperty -Name "UserPromptSubmit" -Value @()
+        }
+
         $newHook = @{
             matcher = "*"
             hooks = @(@{ type = "command"; command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$hookPath`"" })
         }
-        $list = if ($null -eq $json.hooks.UserPromptSubmit) { @() } else { [System.Collections.Generic.List[PSObject]]($json.hooks.UserPromptSubmit) }
-        $list.Add($newHook)
-        $json.hooks.UserPromptSubmit = $list
+        
+        # Simple array addition
+        $currentHooks = @($json.hooks.UserPromptSubmit)
+        $currentHooks += $newHook
+        $json.hooks.UserPromptSubmit = $currentHooks
+        
         $json | ConvertTo-Json -Depth 10 | Set-Content $GlobalSettingsJson -Encoding UTF8
         Write-Host "[+] Registered hook in global settings.json -> $hookPath" -ForegroundColor Green
     }
