@@ -77,10 +77,10 @@ NO IN-CHAT IMPLEMENTATION: Do NOT write implementation code or provide complete 
 
 STEP 1 - Write a detailed PLAN:
   - Describe what files will be created or modified.
-  - Specify the flow name from flow.config.json (e.g., 'standard' or 'claude_chain').
+  - Specify the flow name from `flow.config.json` (optional, `defaultFlow` used if omitted).
 
 STEP 2 - Execute the task IMMEDIATELY:
-  powershell -NoProfile -ExecutionPolicy Bypass -File "$invokeFlow" -Task "Your detailed task description" -Flow "standard"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "$invokeFlow" -Task "Your detailed task description" -Yolo
 
 DO NOT WRITE CODE YOURSELF. WAIT FOR DISPATCHER RESULTS.
 ================================================================================

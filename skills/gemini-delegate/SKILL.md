@@ -22,8 +22,8 @@ Always use the project-local Flow Executor. Check `flow.config.json` for availab
 # Execute task using "defaultFlow" from config (e.g. "claude_chain")
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "YOUR_TASK_HERE" -Yolo
 
-# Force a specific flow from config (e.g. "standard" for Research -> Implement)
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "YOUR_TASK_HERE" -Flow "standard" -Yolo
+# Force a specific flow from config (optional, defaultFlow used otherwise)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "YOUR_TASK_HERE" -Yolo
 ```
 
 ## OUTPUT HANDLING

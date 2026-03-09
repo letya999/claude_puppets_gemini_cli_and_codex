@@ -10,282 +10,206 @@ param(
     [string]$Scope
 )
 
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"
 
-# --- 1. Resolve Target Directory ---
-$ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+# --- 1. Identity & Paths ---
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $GlobalClaudeDir = Join-Path $env:USERPROFILE ".claude"
 $TargetDir = if ($Scope -eq "Global") { $GlobalClaudeDir } else { Join-Path $ProjectRoot ".claude" }
 
-if (-not (Test-Path $TargetDir)) { New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null }
+$LocalClaudeMD = Join-Path $ProjectRoot "CLAUDE.md"
+$GlobalClaudeMD = Join-Path $env:USERPROFILE "CLAUDE.md"
+$GlobalSettingsJson = Join-Path $GlobalClaudeDir "settings.json"
 
-# --- 2. Identity & Paths ---
-$ClaudeFile = if ($Scope -eq "Global") { Join-Path $env:USERPROFILE "CLAUDE.md" } else { Join-Path $ProjectRoot "CLAUDE.md" }
-$ProjSettingsFile = Join-Path $TargetDir "project.settings.json"
-$FlowFile = Join-Path $TargetDir "flow.config.json"
-$GlobalClaudeSettings = Join-Path $GlobalClaudeDir "settings.json"
+# Footprint definitions
+$OurSkills = @("codex-review", "gemini-delegate", "planner")
+$OurAgents = @("coder.md", "orchestrator.md", "planner.md", "researcher.md", "reviewer.md")
+$OurHooks  = @("on-prompt.ps1")
+$StartMarker = "<!-- DISPATCHER_MODE_START -->"
+$EndMarker = "<!-- DISPATCHER_MODE_END -->"
 
-$SrcPaths = @{ "Skills" = Join-Path $ProjectRoot "skills"; "Agents" = Join-Path $ProjectRoot "agents"; "Hooks"  = Join-Path $ProjectRoot "hooks"; "Roles"  = Join-Path $ProjectRoot "roles"; "Scripts"= Join-Path $ProjectRoot "scripts" }
-$TgtPaths = @{ "Skills" = Join-Path $TargetDir "skills"; "Agents" = Join-Path $TargetDir "agents"; "Hooks"  = Join-Path $TargetDir "hooks"; "Roles"  = Join-Path $TargetDir "roles"; "Scripts"= Join-Path $TargetDir "scripts" }
+# --- 2. Infrastructure: Plans ---
+$PlanDir = Join-Path $ProjectRoot "plans"
+if (-not (Test-Path $PlanDir)) { 
+    New-Item -ItemType Directory -Path $PlanDir -Force | Out-Null 
+    Write-Host "[+] Created plans directory: $PlanDir" -ForegroundColor Cyan
+}
+$env:PLAN_DIR = $PlanDir
+[Environment]::SetEnvironmentVariable("PLAN_DIR", $PlanDir, "Process")
 
-# --- 3. Helper: Toggle Markdown Instructions (Consolidated from Toggle-DispatcherMode.ps1) ---
-function Set-MarkdownBlock {
-    param(
-        [Parameter(Mandatory = $true)]
-        [ValidateSet("On", "Off")]
-        [string]$Action,
+# --- 3. Stage 0: Surgical Universal Cleanup ---
+function Invoke-SurgicalCleanup {
+    Write-Host "[*] Phase 0: Surgical Cleanup (Local & Global)..." -ForegroundColor Gray
+    
+    $Scopes = @($GlobalClaudeDir, (Join-Path $ProjectRoot ".claude"))
+    $MDs = @($GlobalClaudeMD, $LocalClaudeMD)
 
-        [Parameter(Mandatory = $true)]
-        [string]$TargetFile
-    )
-
-    if (-not (Test-Path $TargetFile)) {
-        if ($Action -eq "Off") { return }
-        New-Item -ItemType File -Path $TargetFile -Force | Out-Null
-        "# BASE CLAUDE DIRECTIVES`n" | Set-Content $TargetFile -Encoding UTF8
+    # 3.1 Clean CLAUDE.md
+    foreach ($md in $MDs) {
+        if (Test-Path $md) {
+            $content = Get-Content $md -Raw -Encoding UTF8
+            if ($content -match "(?s)\r?\n?$StartMarker.*$EndMarker") {
+                $content = $content -replace "(?s)\r?\n?$StartMarker.*$EndMarker\r?\n?", ""
+                Set-Content -Path $md -Value ($content.Trim()) -Encoding UTF8
+                Write-Host "    [-] Removed directives from $(Split-Path $md -Leaf)" -ForegroundColor DarkGray
+            }
+        }
     }
 
-    $StartMarker = "<!-- DISPATCHER_MODE_START -->"
-    $EndMarker = "<!-- DISPATCHER_MODE_END -->"
-
-    # Read planning config
-    $Settings = Get-Content (Join-Path $ProjectRoot "project.settings.json") -Raw | ConvertFrom-Json
-    $PlanDir = if ($Scope -eq "Global") { Join-Path $PWD "plans" } else { Join-Path $ProjectRoot "plans" }
-
-    $PlanningBlock = ""
-    if ($Settings.planning.enabled) {
-        if (-not (Test-Path $PlanDir)) { New-Item -ItemType Directory -Path $PlanDir -Force | Out-Null }
-        $env:PLAN_DIR = $PlanDir
-        # Force set in current session for visibility
-        [Environment]::SetEnvironmentVariable("PLAN_DIR", $PlanDir, "Process")
-        $PlanningBlock = @"
-    ...
-### MANDATORY PLANNING STEP:
-1. Your FIRST action is to create a detailed plan file in "$PlanDir".
-2. Use the Write tool to save the plan (Format: plan_task_timestamp.md).
-3. After writing the file, call Invoke-Flow.ps1 with the task: 'Implement the plan located at: [Full Path To File]'.
-4. DO NOT repeat the plan in the command line, only pass the path.
-"@
+    # 3.2 Clean Files (Skills, Agents, Hooks)
+    foreach ($sDir in $Scopes) {
+        if (-not (Test-Path $sDir)) { continue }
+        
+        # Skills
+        foreach ($skill in $OurSkills) {
+            $p = Join-Path $sDir "skills\$skill"
+            if (Test-Path $p) { Remove-Item -Recurse -Force $p; Write-Host "    [-] Removed skill: $skill from $sDir" -ForegroundColor DarkGray }
+        }
+        # Agents
+        foreach ($agent in $OurAgents) {
+            $p = Join-Path $sDir "agents\$agent"
+            if (Test-Path $p) { Remove-Item -Force $p; Write-Host "    [-] Removed agent: $agent from $sDir" -ForegroundColor DarkGray }
+        }
+        # Hooks
+        foreach ($hook in $OurHooks) {
+            $p = Join-Path $sDir "hooks\$hook"
+            if (Test-Path $p) { Remove-Item -Force $p; Write-Host "    [-] Removed hook: $hook from $sDir" -ForegroundColor DarkGray }
+        }
     }
 
-    $DispatcherInstructions = @"
+    # 3.3 Clean Global Settings
+    if (Test-Path $GlobalSettingsJson) {
+        $json = Get-Content $GlobalSettingsJson -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($null -ne $json.hooks -and $null -ne $json.hooks.UserPromptSubmit) {
+            $newList = New-Object System.Collections.Generic.List[PSObject]
+            foreach ($entry in $json.hooks.UserPromptSubmit) {
+                $isOurs = $false
+                if ($null -ne $entry.hooks) {
+                    foreach ($h in $entry.hooks) {
+                        if ($h.command -match "on-prompt\.ps1") { $isOurs = $true; break }
+                    }
+                }
+                if (-not $isOurs) { $newList.Add($entry) }
+            }
+            $json.hooks.UserPromptSubmit = $newList.ToArray()
+            $json | ConvertTo-Json -Depth 10 | Set-Content $GlobalSettingsJson -Encoding UTF8
+            Write-Host "    [-] Unregistered hook from global settings.json" -ForegroundColor DarkGray
+        }
+    }
+}
+
+# --- 4. Helpers for Stage 1 ---
+
+function Set-Directives {
+    param([string]$FilePath)
+    $Instructions = @"
 
 $StartMarker
 ## ROLE: STRATEGIC PLANNER & DELEGATOR
-You are a high-level Orchestrator. Your primary goal is to analyze tasks, create detailed implementation plans, and delegate ALL file-system modifications to specialized CLI tools (Gemini, Codex, etc.) via the Dispatcher.
-$PlanningBlock
+Your primary goal is to analyze tasks, create plans in "$PlanDir", and delegate work via Invoke-Flow.ps1.
 
-### MANDATORY RULE: NO DIRECT FILE EDITING
-You are **strictly prohibited** from using built-in editing tools (Edit, Write) for project source code. Writing plan files to plans/ is the ONLY exception. You MUST delegate all source code changes to the Dispatcher.
-
-### EXECUTION COMMAND: Invoke-Flow.ps1
-Use the default flow from flow.config.json. Do NOT hardcode -Flow unless you need to override the default.
+### MANDATORY PLANNING:
+1. Create a plan file in "$PlanDir" (plan_task_timestamp.md).
+2. Call Invoke-Flow.ps1 with the plan path.
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "Implement the plan located at: C:\full\path\to\plan.md" -Yolo
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\Invoke-Flow.ps1" -Task "Implement the plan located at: $PlanDir\your_plan.md" -Yolo
 ```
-
-### WORKFLOW:
-1. **Understand:** Read project files to gather context.
-2. **Plan:** Write a detailed step-by-step implementation plan in the chat.
-3. **Delegate:** Call `Invoke-Flow.ps1` with the plan as the `-Task` parameter.
-4. **Verify:** Once the flow completes, review the output and confirm success.
 $EndMarker
 "@
-
-    $Content = Get-Content $TargetFile -Raw -Encoding UTF8
-    $HasBlock = $Content.Contains($StartMarker)
-
-    if ($Action -eq "Off" -and $HasBlock) {
-        Write-Host "[-] Removing Dispatcher directives from $(Split-Path $TargetFile -Leaf)..." -ForegroundColor Yellow
-        $NewContent = $Content -replace "(?s)\r?\n?$StartMarker.*$EndMarker\r?\n?", ""
-        $NewContent = $NewContent.Trim()
-        Set-Content -Path $TargetFile -Value $NewContent -Encoding UTF8
-    }
-    elseif ($Action -eq "On") {
-        if ($HasBlock) {
-            Write-Host "[*] Updating Dispatcher directives in $(Split-Path $TargetFile -Leaf)..." -ForegroundColor Cyan
-            $NewContent = $Content -replace "(?s)$StartMarker.*$EndMarker", $DispatcherInstructions.Trim()
-        } else {
-            Write-Host "[+] Adding Dispatcher directives to $(Split-Path $TargetFile -Leaf)..." -ForegroundColor Green
-            $NewContent = $Content.Trim() + "`n`n" + $DispatcherInstructions
-        }
-        Set-Content -Path $TargetFile -Value $NewContent -Encoding UTF8
-    }
+    $content = if (Test-Path $FilePath) { Get-Content $FilePath -Raw -Encoding UTF8 } else { "# CLAUDE DIRECTIVES`n" }
+    $newContent = $content.Trim() + "`n`n" + $Instructions
+    Set-Content -Path $FilePath -Value $newContent -Encoding UTF8
+    Write-Host "[+] Applied Directives to $FilePath" -ForegroundColor Green
 }
 
-# --- 4. Helper: Surgical Toggle (Add/Remove only our files) ---
-function Toggle-Feature {
-    param([string]$Feature, [bool]$Enable)
-    $SrcDir = $SrcPaths[$Feature]; $TgtDir = $TgtPaths[$Feature]
-    if (-not (Test-Path $SrcDir)) { return }
-    if (-not (Test-Path $TgtDir)) { New-Item -ItemType Directory -Path $TgtDir -Force | Out-Null }
-
-    $SrcItems = Get-ChildItem $SrcDir
-    if ($Enable) {
-        Write-Host "[+] Enabling $Feature ($Scope scope)..." -ForegroundColor Green
-        foreach ($Item in $SrcItems) {
-            $TargetPath = Join-Path $TgtDir $Item.Name
-            Copy-Item -Recurse -Force $Item.FullName $TargetPath
-        }
-
-        if ($Scope -eq "Local") {
-            foreach ($TgtItem in Get-ChildItem $TgtDir) {
-                if (-not (Test-Path (Join-Path $SrcDir $TgtItem.Name))) {
-                    Remove-Item -Recurse -Force $TgtItem.FullName
-                    Write-Host "    [-] Removed stale $Feature item: $($TgtItem.Name)" -ForegroundColor Yellow
-                }
-            }
-        }
-    } else {
-        Write-Host "[-] Disabling $Feature ($Scope scope)..." -ForegroundColor Yellow
-        foreach ($Item in $SrcItems) {
-            $TargetPath = Join-Path $TgtDir $Item.Name
-            if (Test-Path $TargetPath) {
-                Remove-Item -Recurse -Force $TargetPath
-                Write-Host "    [-] Removed $Feature item: $($Item.Name)" -ForegroundColor DarkGray
-            }
+function Copy-OurFeature {
+    param([string]$Feature, [string]$TargetBase)
+    $Src = Join-Path $ProjectRoot $Feature
+    $Tgt = Join-Path $TargetBase $Feature
+    if (-not (Test-Path $Tgt)) { New-Item -ItemType Directory -Path $Tgt -Force | Out-Null }
+    
+    $Items = if ($Feature -eq "skills") { $OurSkills } elseif ($Feature -eq "agents") { $OurAgents } else { $OurHooks }
+    foreach ($name in $Items) {
+        $s = Join-Path $Src $name
+        if (Test-Path $s) {
+            Copy-Item -Recurse -Force $s (Join-Path $Tgt $name)
+            Write-Host "    [+] Deployed $name to $Tgt" -ForegroundColor Cyan
         }
     }
 }
 
-# --- 5. Helper: Surgical Update of Global Claude settings.json ---
-function Update-GlobalHooks {
-    param([bool]$Enable)
-    if (-not (Test-Path $GlobalClaudeSettings)) { return }
+# --- 5. Main Execution ---
 
-    $HookFileName = "on-prompt.ps1"
-    $HookPath = Join-Path $TgtPaths["Hooks"] $HookFileName
-    $HookCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$HookPath`""
+Invoke-SurgicalCleanup
 
-    try {
-        $RawJson = Get-Content $GlobalClaudeSettings -Raw -Encoding UTF8
-        # Convert to a nested hashtable for easier manipulation
-        $Settings = $RawJson | ConvertFrom-Json
+if ($Mode -eq "None") { 
+    Write-Host "Cleanup complete. No new mode applied." -ForegroundColor Yellow
+    exit 
+}
+
+Write-Host "[*] Phase 1: Applying Mode: $Mode ($Scope scope)..." -ForegroundColor Cyan
+
+# Ensure target structure exists
+if (-not (Test-Path $TargetDir)) { New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null }
+# Always sync roles and scripts as base infra
+Copy-Item -Recurse -Force (Join-Path $ProjectRoot "roles") $TargetDir
+Copy-Item -Recurse -Force (Join-Path $ProjectRoot "scripts") $TargetDir
+
+switch ($Mode) {
+    "Directives" {
+        $targetMD = if ($Scope -eq "Global") { $GlobalClaudeMD } else { $LocalClaudeMD }
+        Set-Directives -FilePath $targetMD
+    }
+    "Skills" {
+        Copy-OurFeature -Feature "skills" -TargetBase $TargetDir
+        $plannerMD = Join-Path $TargetDir "skills\planner\SKILL.md"
+        if (Test-Path $plannerMD) {
+            $c = Get-Content $plannerMD -Raw
+            $escPath = $PlanDir -replace "\\", "\\"
+            $c = $c -replace '\$env:PLAN_DIR', $escPath
+            Set-Content $plannerMD $c -Encoding UTF8
+        }
+    }
+    "Agents" {
+        Copy-OurFeature -Feature "agents" -TargetBase $TargetDir
+        $orchMD = Join-Path $TargetDir "agents\orchestrator.md"
+        if (Test-Path $orchMD) {
+            $c = Get-Content $orchMD -Raw
+            $c = $c -replace "plans/", ($PlanDir.Replace("\","/") + "/")
+            Set-Content $orchMD $c -Encoding UTF8
+        }
+    }
+    "Hooks" {
+        Copy-OurFeature -Feature "hooks" -TargetBase $TargetDir
+        $hookPath = if ($Scope -eq "Global") { Join-Path $GlobalClaudeDir "hooks\on-prompt.ps1" } else { Join-Path $ProjectRoot ".claude\hooks\on-prompt.ps1" }
         
-        # Ensure 'hooks' exists and is a hashtable-like object
-        if ($null -eq $Settings.hooks -or $Settings.hooks.GetType().Name -eq "Object[]") {
-            $Settings | Add-Member -MemberType NoteProperty -Name "hooks" -Value @{} -Force
+        $json = Get-Content $GlobalSettingsJson -Raw -Encoding UTF8 | ConvertFrom-Json
+        $newHook = @{
+            matcher = "*"
+            hooks = @(@{ type = "command"; command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$hookPath`"" })
         }
-
-        # Use a temporary hashtable to build the hooks structure
-        $HooksObj = @{}
-        # Preserve existing hooks from other events if any
-        foreach ($prop in $Settings.hooks.PSObject.Properties) {
-            $HooksObj[$prop.Name] = $prop.Value
-        }
-
-        # Initialize or get UserPromptSubmit list
-        $EventHooks = if ($HooksObj.ContainsKey("UserPromptSubmit")) { @($HooksObj["UserPromptSubmit"]) } else { @() }
-        
-        $CleanEventHooks = New-Object System.Collections.Generic.List[PSObject]
-        foreach ($entry in $EventHooks) {
-            $isOurHook = $false
-            if ($null -ne $entry.hooks) {
-                foreach ($h in $entry.hooks) {
-                    if ($h.command -match [regex]::Escape($HookFileName)) { $isOurHook = $true; break }
-                }
-            }
-            if (-not $isOurHook) { $CleanEventHooks.Add($entry) }
-        }
-
-        if ($Enable) {
-            $NewHookEntry = @{
-                matcher = "*"
-                hooks = @(
-                    @{
-                        type = "command"
-                        command = $HookCommand
-                    }
-                )
-            }
-            $CleanEventHooks.Add($NewHookEntry)
-            Write-Host "[+] Registered hook (UserPromptSubmit) in global settings.json: $HookFileName" -ForegroundColor Green
-        } else {
-            Write-Host "[-] Unregistered hook from global settings.json: $HookFileName" -ForegroundColor Yellow
-        }
-
-        $HooksObj["UserPromptSubmit"] = $CleanEventHooks.ToArray()
-        $Settings.hooks = $HooksObj
-        
-        $Settings | ConvertTo-Json -Depth 10 | Set-Content $GlobalClaudeSettings -Encoding UTF8
-    } catch {
-        Write-Warning "Failed to update global settings.json: $_"
+        $list = if ($null -eq $json.hooks.UserPromptSubmit) { @() } else { [System.Collections.Generic.List[PSObject]]($json.hooks.UserPromptSubmit) }
+        $list.Add($newHook)
+        $json.hooks.UserPromptSubmit = $list
+        $json | ConvertTo-Json -Depth 10 | Set-Content $GlobalSettingsJson -Encoding UTF8
+        Write-Host "[+] Registered hook in global settings.json -> $hookPath" -ForegroundColor Green
     }
 }
 
-# --- 6. Switch Logic ---
-Write-Host "Surgically switching to Mode: $Mode ($Scope scope)..." -ForegroundColor Cyan
+# --- 6. Sync Configs ---
+$LocalSettings = Join-Path $ProjectRoot "project.settings.json"
+$TargetSettings = Join-Path $TargetDir "project.settings.json"
 
-# 6.1 Markdown Directives
-$DirectivesAction = if ($Mode -eq "Directives") { "On" } else { "Off" }
-Set-MarkdownBlock -Action $DirectivesAction -TargetFile $ClaudeFile
+$Settings = Get-Content $LocalSettings -Raw | ConvertFrom-Json
+$Settings.mode = $Scope.ToLower()
+$Settings.formats.directives.enabled = ($Mode -eq "Directives")
+$Settings.formats.skills.enabled     = ($Mode -eq "Skills")
+$Settings.formats.subagents.enabled  = ($Mode -eq "Agents")
+$Settings.formats.hooks.enabled      = ($Mode -eq "Hooks")
 
-# 6.2 Features XOR
-Toggle-Feature -Feature "Skills" -Enable ($Mode -eq "Skills")
-Toggle-Feature -Feature "Agents" -Enable ($Mode -eq "Agents")
-Toggle-Feature -Feature "Hooks"  -Enable ($Mode -eq "Hooks")
+$Settings | ConvertTo-Json -Depth 5 | Set-Content $LocalSettings -Encoding UTF8
+Copy-Item -Force $LocalSettings $TargetSettings
+Copy-Item -Force (Join-Path $ProjectRoot "flow.config.json") (Join-Path $TargetDir "flow.config.json")
 
-# 6.3 Global Hook Registration (XOR)
-Update-GlobalHooks -Enable ($Mode -eq "Hooks")
-
-    # 6.4 Base Infrastructure
-    Toggle-Feature -Feature "Roles"   -Enable $true
-    Toggle-Feature -Feature "Scripts" -Enable $true
-
-    # --- 6.5 Planning Surgical Update ---
-    if ($Settings.planning.enabled) {
-        $PlanDir = if ($Scope -eq "Global") { Join-Path $PWD "plans" } else { Join-Path $ProjectRoot "plans" }
-        
-        # Update Agents if enabled
-        if ($Mode -eq "Agents") {
-            $OrchestratorPath = Join-Path $TgtPaths["Agents"] "orchestrator.md"
-            if (Test-Path $OrchestratorPath) {
-                $Content = Get-Content $OrchestratorPath -Raw
-                if (-not ($Content -match "MANDATORY PLANNING STEP")) {
-                    $PlanningInstr = @"
-
-## MANDATORY PLANNING STEP
-1. Your FIRST action is to create a detailed plan file in `$PlanDir`.
-2. Use the Write tool to save the plan (Format: plan_task_timestamp.md).
-3. After writing the file, call Invoke-Flow.ps1 with the task: 'Implement the plan located at: [Full Path To File]'.
-4. DO NOT repeat the plan in the command line, only pass the path.
-"@
-                    $Content = $Content -replace "## Your job", "## Your job`n$PlanningInstr"
-                    Set-Content -Path $OrchestratorPath -Value $Content -Encoding UTF8
-                }
-            }
-        }
-
-        # Update Skills if enabled
-        if ($Mode -eq "Skills") {
-            $PlannerSkillPath = Join-Path $TgtPaths["Skills"] "planner\SKILL.md"
-            if (Test-Path $PlannerSkillPath) {
-                # Read from target because it was just copied
-                $Content = Get-Content $PlannerSkillPath -Raw
-                # Escape backslashes for JS/Markdown safety
-                $EscapedPlanDir = $PlanDir -replace "\\", "\\"
-                # Use literal string for the search pattern
-                $Content = $Content -replace '\$env:PLAN_DIR', $EscapedPlanDir
-                Set-Content -Path $PlannerSkillPath -Value $Content -Encoding UTF8
-            }
-        }
-    }
-
-# --- 7. Sync Configs ---
-Copy-Item -Force (Join-Path $ProjectRoot "project.settings.json") $ProjSettingsFile
-Copy-Item -Force (Join-Path $ProjectRoot "flow.config.json") $FlowFile
-
-if (Test-Path $ProjSettingsFile) {
-    $Settings = Get-Content $ProjSettingsFile -Raw -Encoding UTF8 | ConvertFrom-Json
-    $Settings.mode = $Scope.ToLower()
-    $Settings.formats.directives.enabled = ($Mode -eq "Directives")
-    $Settings.formats.hooks.enabled      = ($Mode -eq "Hooks")
-    $Settings.formats.skills.enabled     = ($Mode -eq $null) # Skills are always implicitly available if enabled? Actually, XOR logic.
-    # Manual XOR adjustment
-    $Settings.formats.skills.enabled     = ($Mode -eq "Skills")
-    $Settings.formats.subagents.enabled  = ($Mode -eq "Agents")
-    $Settings | ConvertTo-Json -Depth 5 | Set-Content $ProjSettingsFile -Encoding UTF8
-}
-
-Write-Host "Done! Switch complete." -ForegroundColor White
+Write-Host "Done! Surgical switch to $Mode ($Scope) complete." -ForegroundColor White

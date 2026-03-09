@@ -14,20 +14,20 @@
               },
     "formats":  {
                     "directives":  {
-                                       "enabled":  false,
-                                       "description":  "Инструкции в CLAUDE.md для управления Claude Code"
+                                       "enabled":  true,
+                                       "description":  "РРЅСЃС‚СЂСѓРєС†РёРё РІ CLAUDE.md РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ Claude Code"
                                    },
                     "hooks":  {
                                   "enabled":  false,
-                                  "description":  "Автоматические хуки на ввод пользователя (только Global)"
+                                  "description":  "РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРёРµ С…СѓРєРё РЅР° РІРІРѕРґ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (С‚РѕР»СЊРєРѕ Global)"
                               },
                     "skills":  {
-                                   "enabled":  true,
-                                   "description":  "Интеграция кастомных JavaScript навыков"
+                                   "enabled":  false,
+                                   "description":  "РРЅС‚РµРіСЂР°С†РёСЏ РєР°СЃС‚РѕРјРЅС‹С… JavaScript РЅР°РІС‹РєРѕРІ"
                                },
                     "subagents":  {
                                       "enabled":  false,
-                                      "description":  "Использование профилей агентов (researcher, coder и т.д.)"
+                                      "description":  "РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РїСЂРѕС„РёР»РµР№ Р°РіРµРЅС‚РѕРІ (researcher, coder Рё С‚.Рґ.)"
                                   }
                 },
     "planning":  {

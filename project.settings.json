@@ -1,37 +1,37 @@
-{
-  "mode": "local",
-  "activeFormat": "directives",
-  "version": "2.0.0",
-  "windowsVersion": "11",
-  "powershellCompatibility": [
-    "5.1",
-    "7.1",
-    "7.4"
-  ],
-  "paths": {
-    "globalBase": "~/.claude",
-    "localBase": ".claude"
-  },
-  "formats": {
-    "directives": {
-      "enabled": true,
-      "description": "Инструкции в CLAUDE.md для управления Claude Code"
-    },
-    "hooks": {
-      "enabled": false,
-      "description": "Автоматические хуки на ввод пользователя (только Global)"
-    },
-    "skills": {
-      "enabled": false,
-      "description": "Интеграция кастомных JavaScript навыков"
-    },
-    "subagents": {
-      "enabled": false,
-      "description": "Использование профилей агентов (researcher, coder и т.д.)"
-    }
-  },
-  "planning": {
-    "enabled": true,
-    "dirName": "plans"
-  }
+﻿{
+    "mode":  "local",
+    "activeFormat":  "directives",
+    "version":  "2.0.0",
+    "windowsVersion":  "11",
+    "powershellCompatibility":  [
+                                    "5.1",
+                                    "7.1",
+                                    "7.4"
+                                ],
+    "paths":  {
+                  "globalBase":  "~/.claude",
+                  "localBase":  ".claude"
+              },
+    "formats":  {
+                    "directives":  {
+                                       "enabled":  true,
+                                       "description":  "РРЅСЃС‚СЂСѓРєС†РёРё РІ CLAUDE.md РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ Claude Code"
+                                   },
+                    "hooks":  {
+                                  "enabled":  false,
+                                  "description":  "РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРёРµ С…СѓРєРё РЅР° РІРІРѕРґ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (С‚РѕР»СЊРєРѕ Global)"
+                              },
+                    "skills":  {
+                                   "enabled":  false,
+                                   "description":  "РРЅС‚РµРіСЂР°С†РёСЏ РєР°СЃС‚РѕРјРЅС‹С… JavaScript РЅР°РІС‹РєРѕРІ"
+                               },
+                    "subagents":  {
+                                      "enabled":  false,
+                                      "description":  "РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РїСЂРѕС„РёР»РµР№ Р°РіРµРЅС‚РѕРІ (researcher, coder Рё С‚.Рґ.)"
+                                  }
+                },
+    "planning":  {
+                     "enabled":  true,
+                     "dirName":  "plans"
+                 }
 }
